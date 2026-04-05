@@ -1,0 +1,48 @@
+name: CI + Deploy GCP
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python3 -c "import server; print('Import OK')"
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to GCP VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 104.197.172.23
+          username: ryjek
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "=== NEXUS DEPLOY $(date) ==="
+            cd /opt/nexus-mcp-server
+            
+            # Pull latest
+            git fetch origin main
+            git reset --hard origin/main
+            echo "Deployed: $(git log --oneline -1)"
+            
+            # Ensure deps
+            pip install python-dotenv --quiet || true
+            
+            # Restart (no rebuild = fast)
+            docker compose restart nexus-mcp
+            
+            # Verify
+            sleep 3
+            docker ps --filter name=nexus-mcp --format '{{.Names}} {{.Status}}'
+            echo "=== DONE ==="

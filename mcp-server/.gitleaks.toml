@@ -1,0 +1,41 @@
+[title]
+Gitleaks — NEXUS MCP Server
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API Key"
+regex = '''sk-ant-[a-zA-Z0-9_\-]{80,}'''
+secretGroup = 0
+entropy = 4.5
+
+[[rules]]
+id = "xai-api-key"
+description = "xAI API Key"
+regex = '''xai-[a-zA-Z0-9]{80,}'''
+secretGroup = 0
+entropy = 4.5
+
+[[rules]]
+id = "github-pat"
+description = "GitHub PAT"
+regex = '''REDACTED_GITHUB_TOKEN[a-zA-Z0-9]{36}'''
+secretGroup = 0
+entropy = 4.7
+
+[[rules]]
+id = "google-api-key"
+description = "Google API Key"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+secretGroup = 0
+entropy = 4.5
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{48}'''
+secretGroup = 0
+entropy = 4.5
+
+[allowlist]
+files = [".env.example", "*.md", "HANDOFF.md", "README.md"]
+regexes = ["your_.*_here", "example", "placeholder"]

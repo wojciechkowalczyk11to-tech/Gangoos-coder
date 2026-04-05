@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.template
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.log
+.DS_Store
+gcloud/
+*.key
+*.json.secret

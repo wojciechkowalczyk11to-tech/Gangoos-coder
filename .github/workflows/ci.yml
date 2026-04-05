@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_TARGET_DIR: /tmp/cargo-target
+  CARGO_FEATURES: "--no-default-features --features aws-providers,telemetry,otel,rustls-tls"
+
+jobs:
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libxcb1-dev libxrandr-dev libdbus-1-dev pkg-config protobuf-compiler libprotobuf-dev
+      - name: Cargo check
+        run: cargo check -p goose -p goose-cli -p goose-mcp -p goose-server -p goose-acp $CARGO_FEATURES
+      - name: Clippy
+        run: cargo clippy -p goose -p goose-cli -p goose-mcp -p goose-server -p goose-acp $CARGO_FEATURES -- -D warnings
+      - name: Rust tests
+        run: cargo test -p goose $CARGO_FEATURES -- --nocapture 2>&1 | tail -50
+
+  python:
+    name: MCP server tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r mcp-server/requirements.txt
+      - name: Python tests
+        run: pytest mcp-server/tests
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for obvious leaked credentials
+        run: |
+          if grep -RInE '(ghp_[A-Za-z0-9]{20,}|xai-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,}|dop_v1_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,})' --exclude-dir='.git' --exclude='.env' .; then
+            echo "ERROR: leaked credential pattern found"
+            exit 1
+          fi
+          echo "No obvious credential patterns detected."
