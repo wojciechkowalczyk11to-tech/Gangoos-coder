@@ -1,0 +1,725 @@
+#!/usr/bin/env python3
+"""
+Gangoos CLI — Unified wrapper for Gangoos-coder agent + MCP server + Ollama.
+
+Features:
+  - init: first-time setup wizard
+  - start: docker-compose up
+  - stop: graceful shutdown
+  - status: health & service status
+  - chat: HTTP API interface to agent
+  - tools: list MCP tools
+  - test: run test suite
+  - deploy: Digital Ocean deployment
+  - logs: tail service logs
+  - config: show/edit configuration
+  - doctor: diagnose issues
+  - upgrade: git pull + rebuild
+"""
+
+import os
+import sys
+import json
+import subprocess
+import argparse
+import time
+import signal
+import requests
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Optional, Dict, List
+from dataclasses import dataclass
+from urllib.parse import urljoin
+
+try:
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+    from rich.prompt import Prompt, Confirm
+    from rich.syntax import Syntax
+    from rich.live import Live
+    from rich.align import Align
+except ImportError:
+    print("ERROR: rich library not found. Install with: pip install rich")
+    sys.exit(1)
+
+__version__ = "1.0.0"
+
+console = Console()
+
+
+@dataclass
+class Config:
+    """Configuration state."""
+    project_root: Path
+    env_file: Path
+    docker_compose_file: Path
+    is_remote: bool = False
+
+    @classmethod
+    def detect(cls) -> "Config":
+        """Auto-detect project root and configuration."""
+        current = Path.cwd()
+
+        # Search for docker-compose.yml or .env going up
+        for candidate in [current, *current.parents]:
+            if (candidate / "docker-compose.yml").exists():
+                return cls(
+                    project_root=candidate,
+                    env_file=candidate / ".env",
+                    docker_compose_file=candidate / "docker-compose.yml",
+                    is_remote=False
+                )
+
+        console.print("[red]ERROR[/red]: Could not find gangoos-coder project root.")
+        console.print("Run 'gangoos init' to create a new project, or 'cd' into an existing one.")
+        sys.exit(1)
+
+
+def run_cmd(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
+    """Run a shell command, handling errors gracefully."""
+    try:
+        return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Command failed:[/red] {' '.join(cmd)}")
+        if e.stderr:
+            console.print(f"[red]{e.stderr}[/red]")
+        raise
+
+
+def spinner_task(title: str):
+    """Context manager for spinner tasks."""
+    class Spinner:
+        def __enter__(self):
+            self.progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            )
+            self.progress.__enter__()
+            self.task = self.progress.add_task(title)
+            return self.progress
+
+        def __exit__(self, *args):
+            self.progress.__exit__(*args)
+
+    return Spinner()
+
+
+def cmd_init(args):
+    """First-time setup wizard."""
+    console.print("\n[bold cyan]Gangoos Setup Wizard[/bold cyan]\n")
+
+    project_name = Prompt.ask("Project name", default="gangoos-coder")
+    project_root = Path(project_name)
+
+    if project_root.exists():
+        if not Confirm.ask(f"Directory '{project_name}' exists. Continue?"):
+            console.print("[yellow]Cancelled.[/yellow]")
+            return
+    else:
+        project_root.mkdir(parents=True)
+
+    console.print("\n[bold]Configuration[/bold]")
+
+    provider = Prompt.ask(
+        "LLM Provider",
+        choices=["xai", "groq", "deepseek", "ollama"],
+        default="xai"
+    )
+
+    # Create .env file
+    env_content = _generate_env_template(provider)
+    env_file = project_root / ".env"
+    env_file.write_text(env_content)
+    console.print(f"[green]✓[/green] Created [bold].env[/bold]")
+
+    # Prompt for API keys
+    if provider == "xai":
+        key = Prompt.ask("xAI API Key (or press Enter to skip)", password=True, default="")
+        if key:
+            _update_env(env_file, "XAI_API_KEY", key)
+    elif provider == "groq":
+        key = Prompt.ask("Groq API Key (or press Enter to skip)", password=True, default="")
+        if key:
+            _update_env(env_file, "GROQ_API_KEY", key)
+    elif provider == "deepseek":
+        key = Prompt.ask("DeepSeek API Key (or press Enter to skip)", password=True, default="")
+        if key:
+            _update_env(env_file, "DEEPSEEK_API_KEY", key)
+    elif provider == "ollama":
+        ollama_host = Prompt.ask("Ollama host", default="http://localhost:11434")
+        _update_env(env_file, "OLLAMA_HOST", ollama_host)
+
+    # GitHub token
+    github_token = Prompt.ask("GitHub Token (optional, press Enter to skip)", password=True, default="")
+    if github_token:
+        _update_env(env_file, "GITHUB_TOKEN", github_token)
+
+    # NEXUS_AUTH_TOKEN
+    import secrets
+    token = secrets.token_urlsafe(32)
+    _update_env(env_file, "NEXUS_AUTH_TOKEN", token)
+    console.print(f"[green]✓[/green] Generated NEXUS_AUTH_TOKEN")
+
+    console.print(f"\n[green]✓[/green] Setup complete!")
+    console.print(f"\nNext steps:")
+    console.print(f"  cd {project_name}")
+    console.print(f"  gangoos start")
+
+
+def cmd_start(args):
+    """Start docker-compose services."""
+    config = Config.detect()
+
+    console.print("\n[bold cyan]Starting Gangoos Services[/bold cyan]\n")
+
+    compose_file = config.docker_compose_file
+    if args.profile:
+        cmd = ["docker", "compose", "-f", str(compose_file), "up", "-d", "--profile", args.profile]
+    else:
+        cmd = ["docker", "compose", "-f", str(compose_file), "up", "-d"]
+
+    with spinner_task("Starting services..."):
+        run_cmd(cmd, cwd=config.project_root)
+
+    # Wait for health checks
+    console.print("\n[bold]Waiting for services to be healthy...[/bold]")
+    _wait_for_services(config)
+
+    console.print("\n[green]✓[/green] Services started successfully!")
+    console.print(f"\n[bold]Endpoints:[/bold]")
+    console.print(f"  Agent: http://localhost:3000")
+    console.print(f"  MCP Server: http://localhost:8080")
+    if args.profile and "llm" in args.profile:
+        console.print(f"  Ollama: http://localhost:11434")
+
+
+def cmd_stop(args):
+    """Stop docker-compose services."""
+    config = Config.detect()
+
+    console.print("\n[bold cyan]Stopping Gangoos Services[/bold cyan]\n")
+
+    if not Confirm.ask("Stop all running services?"):
+        return
+
+    with spinner_task("Stopping services..."):
+        run_cmd(["docker", "compose", "-f", str(config.docker_compose_file), "down"],
+                cwd=config.project_root)
+
+    console.print("[green]✓[/green] Services stopped.")
+
+
+def cmd_status(args):
+    """Show service status."""
+    config = Config.detect()
+
+    console.print("\n[bold cyan]Service Status[/bold cyan]\n")
+
+    result = run_cmd(["docker", "compose", "-f", str(config.docker_compose_file), "ps"],
+                     cwd=config.project_root)
+
+    table = Table(title="Running Services")
+    table.add_column("Service", style="cyan")
+    table.add_column("Status", style="magenta")
+    table.add_column("Ports", style="green")
+
+    for line in result.stdout.split("\n")[1:]:
+        if not line.strip():
+            continue
+        parts = line.split()
+        if len(parts) >= 3:
+            table.add_row(parts[0], " ".join(parts[1:-1]), parts[-1])
+
+    console.print(table)
+
+    # Health checks
+    console.print("\n[bold]Health Checks[/bold]")
+    _check_service_health("http://localhost:3000", "Agent")
+    _check_service_health("http://localhost:8080", "MCP Server")
+    _check_service_health("http://localhost:11434", "Ollama")
+
+    # Tool count
+    try:
+        resp = requests.get("http://localhost:8080/tools", timeout=2)
+        if resp.status_code == 200:
+            tools = resp.json()
+            count = len(tools.get("tools", []))
+            console.print(f"[green]✓[/green] MCP Tools: [bold]{count}[/bold]")
+    except:
+        pass
+
+
+def cmd_chat(args):
+    """Send a message to the agent."""
+    if not args.message:
+        console.print("[red]ERROR[/red]: No message provided. Use: gangoos chat 'your message'")
+        sys.exit(1)
+
+    url = "http://localhost:3000/chat"
+    payload = {"message": args.message}
+
+    try:
+        with spinner_task("Sending to agent..."):
+            resp = requests.post(url, json=payload, timeout=30)
+
+        if resp.status_code == 200:
+            data = resp.json()
+            console.print("\n[bold cyan]Agent Response[/bold cyan]")
+            console.print(data.get("response", "No response"))
+        else:
+            console.print(f"[red]Error:[/red] {resp.status_code} {resp.text}")
+    except requests.exceptions.ConnectionError:
+        console.print("[red]ERROR[/red]: Cannot connect to agent at http://localhost:3000")
+        console.print("Run 'gangoos start' first.")
+        sys.exit(1)
+
+
+def cmd_tools(args):
+    """List available MCP tools."""
+    try:
+        with spinner_task("Fetching tools..."):
+            resp = requests.get("http://localhost:8080/tools", timeout=5)
+
+        if resp.status_code != 200:
+            console.print(f"[red]Error:[/red] {resp.status_code}")
+            return
+
+        data = resp.json()
+        tools = data.get("tools", [])
+
+        # Group by domain
+        by_domain = {}
+        for tool in tools:
+            domain = tool.get("domain", "other")
+            if domain not in by_domain:
+                by_domain[domain] = []
+            by_domain[domain].append(tool)
+
+        for domain, domain_tools in sorted(by_domain.items()):
+            console.print(f"\n[bold cyan]{domain}[/bold cyan] ({len(domain_tools)} tools)")
+            for tool in sorted(domain_tools, key=lambda t: t.get("name", "")):
+                name = tool.get("name", "?")
+                desc = tool.get("description", "")[:60]
+                console.print(f"  [green]→[/green] {name}: {desc}")
+
+        console.print(f"\n[bold]Total:[/bold] {len(tools)} tools")
+
+    except requests.exceptions.ConnectionError:
+        console.print("[red]ERROR[/red]: Cannot connect to MCP server at http://localhost:8080")
+        console.print("Run 'gangoos start' first.")
+        sys.exit(1)
+
+
+def cmd_test(args):
+    """Run test suite."""
+    config = Config.detect()
+
+    console.print("\n[bold cyan]Running Tests[/bold cyan]\n")
+
+    # Run Rust tests
+    console.print("[bold]Rust tests[/bold]")
+    with spinner_task("Running cargo test..."):
+        result = run_cmd(["cargo", "test", "--release"], cwd=config.project_root, check=False)
+    if result.returncode == 0:
+        console.print("[green]✓[/green] Rust tests passed")
+    else:
+        console.print("[red]✗[/red] Rust tests failed")
+
+    # Run Python tests
+    console.print("\n[bold]Python tests[/bold]")
+    mcp_dir = config.project_root / "mcp-server"
+    if mcp_dir.exists():
+        with spinner_task("Running pytest..."):
+            result = run_cmd(["python", "-m", "pytest", "tests/", "-v"],
+                           cwd=mcp_dir, check=False)
+        if result.returncode == 0:
+            console.print("[green]✓[/green] Python tests passed")
+        else:
+            console.print("[red]✗[/red] Python tests failed")
+
+
+def cmd_deploy(args):
+    """Deploy to Digital Ocean."""
+    console.print("\n[bold cyan]Digital Ocean Deployment[/bold cyan]\n")
+
+    droplet_ip = Prompt.ask("Droplet IP address")
+    ssh_key = Prompt.ask("SSH private key path", default="~/.ssh/id_rsa")
+
+    ssh_key = Path(ssh_key).expanduser()
+    if not ssh_key.exists():
+        console.print(f"[red]ERROR[/red]: SSH key not found at {ssh_key}")
+        sys.exit(1)
+
+    console.print("\n[bold]Deployment Plan[/bold]")
+    console.print(f"  Target: [cyan]{droplet_ip}[/cyan]")
+    console.print(f"  SSH Key: [cyan]{ssh_key.name}[/cyan]")
+
+    if not Confirm.ask("\nProceed with deployment?"):
+        console.print("[yellow]Cancelled.[/yellow]")
+        return
+
+    with spinner_task("Deploying..."):
+        # SCP deploy script to droplet
+        script = Path(__file__).parent / "deploy_do.sh"
+        subprocess.run([
+            "scp", "-i", str(ssh_key),
+            str(script),
+            f"root@{droplet_ip}:/tmp/deploy.sh"
+        ], check=True)
+
+        # SSH and execute
+        subprocess.run([
+            "ssh", "-i", str(ssh_key),
+            f"root@{droplet_ip}",
+            "bash /tmp/deploy.sh"
+        ], check=True)
+
+    console.print("[green]✓[/green] Deployment complete!")
+    console.print(f"\nAccess your deployment:")
+    console.print(f"  https://{droplet_ip}")
+
+
+def cmd_logs(args):
+    """Tail service logs."""
+    config = Config.detect()
+
+    service = args.service or ""
+    cmd = ["docker", "compose", "-f", str(config.docker_compose_file), "logs", "-f"]
+    if service:
+        cmd.append(service)
+
+    try:
+        subprocess.run(cmd, cwd=config.project_root)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Logs stopped.[/yellow]")
+
+
+def cmd_config(args):
+    """Show or edit configuration."""
+    config = Config.detect()
+
+    if args.action == "show":
+        console.print("\n[bold cyan].env Configuration[/bold cyan]\n")
+        if config.env_file.exists():
+            content = config.env_file.read_text()
+            # Mask secrets
+            lines = []
+            for line in content.split("\n"):
+                if "=" in line and any(secret in line for secret in ["TOKEN", "KEY", "PASSWORD"]):
+                    key = line.split("=")[0]
+                    lines.append(f"{key}=***")
+                else:
+                    lines.append(line)
+            console.print(Syntax("\n".join(lines), "bash", theme="monokai"))
+        else:
+            console.print("[yellow]No .env file found.[/yellow]")
+
+    elif args.action == "edit":
+        if not config.env_file.exists():
+            console.print("[red]ERROR[/red]: .env file not found. Run 'gangoos init' first.")
+            sys.exit(1)
+
+        key = Prompt.ask("Key to edit")
+        value = Prompt.ask("New value", password=True)
+        _update_env(config.env_file, key, value)
+        console.print(f"[green]✓[/green] Updated {key}")
+
+
+def cmd_doctor(args):
+    """Diagnose common issues."""
+    console.print("\n[bold cyan]Gangoos Doctor[/bold cyan]\n")
+
+    checks = [
+        ("Docker", _check_docker),
+        ("Docker Compose", _check_docker_compose),
+        ("Port 3000 (Agent)", lambda: _check_port(3000)),
+        ("Port 8080 (MCP)", lambda: _check_port(8080)),
+        ("Port 11434 (Ollama)", lambda: _check_port(11434)),
+        ("git", _check_git),
+        ("Python", _check_python),
+    ]
+
+    passed = 0
+    failed = 0
+
+    for name, check_fn in checks:
+        try:
+            result = check_fn()
+            if result:
+                console.print(f"[green]✓[/green] {name}")
+                passed += 1
+            else:
+                console.print(f"[red]✗[/red] {name}")
+                failed += 1
+        except Exception as e:
+            console.print(f"[red]✗[/red] {name}: {e}")
+            failed += 1
+
+    console.print(f"\n[bold]Summary:[/bold] {passed} passed, {failed} failed")
+
+    if failed > 0:
+        console.print("\n[bold]Suggestions:[/bold]")
+        console.print("  - Install missing tools")
+        console.print("  - Check firewall/port conflicts")
+        console.print("  - Review logs with 'gangoos logs'")
+
+
+def cmd_upgrade(args):
+    """Upgrade gangoos-coder (git pull + rebuild)."""
+    config = Config.detect()
+
+    console.print("\n[bold cyan]Upgrading Gangoos[/bold cyan]\n")
+
+    if not Confirm.ask("Pull latest changes from git and rebuild?"):
+        console.print("[yellow]Cancelled.[/yellow]")
+        return
+
+    with spinner_task("Pulling latest changes..."):
+        run_cmd(["git", "pull"], cwd=config.project_root)
+
+    with spinner_task("Rebuilding Docker images..."):
+        run_cmd(["docker", "compose", "build", "--no-cache"],
+                cwd=config.project_root)
+
+    console.print("[green]✓[/green] Upgrade complete!")
+    console.print("\nRun 'gangoos start' to apply changes.")
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Helper Functions
+# ────────────────────────────────────────────────────────────────────────────
+
+def _generate_env_template(provider: str) -> str:
+    """Generate .env template."""
+    return f"""# Gangoos-coder Configuration
+# Generated by 'gangoos init'
+
+# ── Agent ─────────────────────────────────────────────────────────────────────
+GOOSE_PROVIDER={provider}
+GOOSE_MODEL={'qwen3:8b' if provider == 'ollama' else 'grok-4-1-fast-reasoning' if provider == 'xai' else 'qwen-qwq-32b' if provider == 'groq' else 'deepseek-chat'}
+GOOSE_HOST=0.0.0.0
+GOOSE_PORT=3000
+GOOSE_TLS=false
+
+# ── MCP Server ────────────────────────────────────────────────────────────────
+NEXUS_AUTH_TOKEN=
+NEXUS_URL=http://mcp-server:8080
+PORT=8080
+MCP_ALLOWED_HOSTS=localhost,127.0.0.1,mcp-server,gangoos-agent
+
+# ── Local LLM ──────────────────────────────────────────────────────────────────
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qwen3:8b
+
+# ── Fallback Providers ────────────────────────────────────────────────────────
+GROQ_API_KEY=
+DEEPSEEK_API_KEY=
+XAI_API_KEY=
+
+# ── GitHub ────────────────────────────────────────────────────────────────────
+GITHUB_TOKEN=
+GITHUB_OWNER=
+
+# ── Other Providers ───────────────────────────────────────────────────────────
+GEMINI_API_KEY=
+DIGITALOCEAN_TOKEN=
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_ZONE_ID=
+
+# ── Security ──────────────────────────────────────────────────────────────────
+ALLOWED_SSH_HOSTS=localhost
+"""
+
+
+def _update_env(env_file: Path, key: str, value: str) -> None:
+    """Update or add env variable."""
+    content = env_file.read_text()
+    lines = content.split("\n")
+    updated = False
+
+    for i, line in enumerate(lines):
+        if line.startswith(f"{key}="):
+            lines[i] = f"{key}={value}"
+            updated = True
+            break
+
+    if not updated:
+        lines.append(f"{key}={value}")
+
+    env_file.write_text("\n".join(lines))
+
+
+def _wait_for_services(config: Config, timeout: int = 60) -> None:
+    """Wait for services to be healthy."""
+    start = time.time()
+    services = [
+        ("http://localhost:3000/health", "Agent"),
+        ("http://localhost:8080/health", "MCP"),
+    ]
+
+    while time.time() - start < timeout:
+        healthy = 0
+        for url, name in services:
+            try:
+                resp = requests.get(url, timeout=2)
+                if resp.status_code == 200:
+                    healthy += 1
+            except:
+                pass
+
+        if healthy == len(services):
+            return
+
+        time.sleep(2)
+
+    console.print("[yellow]Warning[/yellow]: Not all services are healthy after 60s.")
+
+
+def _check_service_health(url: str, name: str) -> None:
+    """Check if a service is responding."""
+    try:
+        resp = requests.get(url, timeout=2)
+        if resp.status_code == 200:
+            console.print(f"[green]✓[/green] {name}: OK")
+        else:
+            console.print(f"[yellow]⚠[/yellow] {name}: {resp.status_code}")
+    except requests.exceptions.ConnectionError:
+        console.print(f"[red]✗[/red] {name}: Not responding")
+    except Exception as e:
+        console.print(f"[red]✗[/red] {name}: {e}")
+
+
+def _check_docker() -> bool:
+    """Check if Docker is installed."""
+    result = subprocess.run(["docker", "--version"], capture_output=True)
+    return result.returncode == 0
+
+
+def _check_docker_compose() -> bool:
+    """Check if Docker Compose is installed."""
+    result = subprocess.run(["docker", "compose", "--version"], capture_output=True)
+    return result.returncode == 0
+
+
+def _check_port(port: int) -> bool:
+    """Check if a port is available."""
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex(("127.0.0.1", port))
+    sock.close()
+    return result == 0
+
+
+def _check_git() -> bool:
+    """Check if git is installed."""
+    result = subprocess.run(["git", "--version"], capture_output=True)
+    return result.returncode == 0
+
+
+def _check_python() -> bool:
+    """Check if Python is available."""
+    result = subprocess.run(["python3", "--version"], capture_output=True)
+    return result.returncode == 0
+
+
+def main():
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser(
+        description="Gangoos CLI — Unified wrapper for Gangoos-coder",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  gangoos init              # First-time setup
+  gangoos start             # Start services
+  gangoos status            # Check service status
+  gangoos chat "hello"      # Send message to agent
+  gangoos logs agent        # Tail agent logs
+  gangoos doctor            # Diagnose issues
+  gangoos upgrade           # Pull latest + rebuild
+        """
+    )
+
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+
+    subparsers = parser.add_subparsers(dest="command", help="Command")
+
+    # init
+    subparsers.add_parser("init", help="First-time setup wizard")
+
+    # start
+    start_parser = subparsers.add_parser("start", help="Start services")
+    start_parser.add_argument("--profile", help="Docker Compose profile (e.g., llm)")
+
+    # stop
+    subparsers.add_parser("stop", help="Stop services")
+
+    # status
+    subparsers.add_parser("status", help="Show service status")
+
+    # chat
+    chat_parser = subparsers.add_parser("chat", help="Send message to agent")
+    chat_parser.add_argument("message", nargs="?", help="Message to send")
+
+    # tools
+    subparsers.add_parser("tools", help="List MCP tools")
+
+    # test
+    subparsers.add_parser("test", help="Run test suite")
+
+    # deploy
+    subparsers.add_parser("deploy", help="Deploy to Digital Ocean")
+
+    # logs
+    logs_parser = subparsers.add_parser("logs", help="Tail service logs")
+    logs_parser.add_argument("service", nargs="?", help="Service name (agent, mcp-server, ollama)")
+
+    # config
+    config_parser = subparsers.add_parser("config", help="Show/edit configuration")
+    config_parser.add_argument("action", choices=["show", "edit"], default="show", nargs="?")
+
+    # doctor
+    subparsers.add_parser("doctor", help="Diagnose common issues")
+
+    # upgrade
+    subparsers.add_parser("upgrade", help="Upgrade gangoos-coder")
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return
+
+    # Dispatch commands
+    commands = {
+        "init": cmd_init,
+        "start": cmd_start,
+        "stop": cmd_stop,
+        "status": cmd_status,
+        "chat": cmd_chat,
+        "tools": cmd_tools,
+        "test": cmd_test,
+        "deploy": cmd_deploy,
+        "logs": cmd_logs,
+        "config": cmd_config,
+        "doctor": cmd_doctor,
+        "upgrade": cmd_upgrade,
+    }
+
+    if args.command in commands:
+        try:
+            commands[args.command](args)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Interrupted.[/yellow]")
+            sys.exit(0)
+        except Exception as e:
+            console.print(f"\n[red]ERROR[/red]: {e}")
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

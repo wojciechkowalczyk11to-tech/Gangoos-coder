@@ -1,0 +1,169 @@
+version: '3.8'
+
+# Docker Compose for VM2 (gangus-coder orchestrator)
+# Runs MCP server + CodeAct agent (Rust)
+# Ollama runs on VM1 (10.114.0.3:11434)
+# Internal communication via VPC (10.114.0.x)
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+      args:
+        - PYTHON_VERSION=3.11
+    container_name: mcp-server
+    image: gangus-coder/mcp-server:latest
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      - NEXUS_AUTH_TOKEN=${NEXUS_AUTH_TOKEN}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://10.114.0.3:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gangus-coder}
+      - XAI_API_KEY=${XAI_API_KEY}
+      - GOOSE_PROVIDER=${GOOSE_PROVIDER:-ollama}
+      - GOOSE_MODEL=${GOOSE_MODEL:-gangus-coder}
+      - PORT=${PORT:-8080}
+      - MCP_ALLOWED_HOSTS=${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,mcp-server,gangus-agent}
+      - MOJO_EXEC_BACKEND=${MOJO_EXEC_BACKEND:-disabled}
+      - LOG_LEVEL=INFO
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Always restart unless explicitly stopped
+    restart: unless-stopped
+
+    # Mount configuration
+    volumes:
+      - ./config:/app/config:ro
+      - ./models:/app/models
+      - mcp-cache:/app/cache
+
+    # Network
+    networks:
+      - gangus-network
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Security
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  gangus-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        - RUST_VERSION=latest
+    container_name: gangus-agent
+    image: gangus-coder/gangus-agent:latest
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      - GOOSE_PROVIDER=${GOOSE_PROVIDER:-ollama}
+      - GOOSE_MODEL=${GOOSE_MODEL:-gangus-coder}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://10.114.0.3:11434}
+      - NEXUS_URL=${NEXUS_URL:-http://mcp-server:8080}
+      - NEXUS_AUTH_TOKEN=${NEXUS_AUTH_TOKEN}
+      - PORT=${GOOSE_PORT:-3000}
+      - MCP_SERVER_URL=http://mcp-server:8080
+      - LOG_LEVEL=INFO
+      - ALLOWED_SSH_HOSTS=${ALLOWED_SSH_HOSTS:-localhost}
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Always restart unless explicitly stopped
+    restart: unless-stopped
+
+    # Depends on MCP server being ready
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+
+    # Mount configuration
+    volumes:
+      - ./config:/app/config:ro
+      - agent-workspace:/app/workspace
+      - agent-cache:/app/cache
+
+    # Network
+    networks:
+      - gangus-network
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Security
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Optional: Monitoring/logging aggregator (comment out if not needed)
+  # Uncomment to enable centralized logging
+  # logs:
+  #   image: alpine:latest
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: tail -f /dev/null
+  #   networks:
+  #     - gangus-network
+
+networks:
+  # Internal bridge network for inter-service communication
+  gangus-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  mcp-cache:
+    driver: local
+  agent-workspace:
+    driver: local
+  agent-cache:
+    driver: local

@@ -1,0 +1,34 @@
+# Ollama Modelfile for Gangoos-Coder
+#
+# Usage:
+#   1. Export GGUF from trained model (see FINETUNING_GUIDE.md)
+#   2. Place gangoos-coder-q4km.gguf in same directory as this file
+#   3. Run: ollama create gangoos-coder -f Modelfile
+#   4. Run: ollama run gangoos-coder
+
+# Base model (GGUF format)
+# Download/convert your trained model and place it here
+FROM ./gangoos-coder-q4km.gguf
+
+# Chat template - format for how model receives prompts
+# Use [INST] format for Qwen models
+TEMPLATE "[INST] {{ .Prompt }} [/INST]"
+
+# Stop tokens - sequences that indicate end of response
+PARAMETER stop "[INST]"
+PARAMETER stop "[/INST]"
+
+# Generation parameters
+PARAMETER temperature 0.7          # 0.0-2.0, higher = more creative
+PARAMETER top_k 40                # Top-k sampling
+PARAMETER top_p 0.9               # Nucleus sampling
+PARAMETER num_predict 512         # Max tokens to generate
+PARAMETER repeat_penalty 1.1       # Penalize repetition
+
+# System message/context
+SYSTEM """You are Gangoos-Coder, an AI assistant specialized in writing, analyzing, and debugging code.
+You write clean, well-documented, and efficient code.
+You can work with multiple programming languages and provide explanations for your solutions."""
+
+# Optional: Add custom license/attribution
+# You can add information about the model here

@@ -1,0 +1,7 @@
+{"name": "John", "age": 30}
+{"name": "Alice", "age": 25}
+invalid json line
+{"name": "Bob", "age": 35}
+{"name": "Eve", "age": 28}
+not json at all
+{"name": "Charlie", "age": 40}

@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""
+Finetuning Dataset Generator for Gangoos-coder
+Generates JSONL dataset for finetuning Qwen3.5:9b with CodeAct patterns.
+Simulates conversations from 6 Manus AI agents across multiple domains.
+"""
+
+import json
+import random
+from dataclasses import dataclass
+from typing import List
+from enum import Enum
+
+
+class TaskDomain(Enum):
+    """Training task domains"""
+    CODEACT = "codeact"
+    RUST_AGENT = "rust_agent"
+    MCP_SERVER = "mcp_server"
+    MOJO = "mojo"
+    DEVOPS = "devops"
+    SECURITY = "security"
+
+
+@dataclass
+class TrainingExample:
+    """OpenAI-compatible training example"""
+    messages: List[dict]
+
+    def to_dict(self):
+        return {"messages": self.messages}
+
+
+class DatasetGenerator:
+    """Generate training dataset for Gangoos-coder finetuning"""
+
+    def __init__(self, seed=42):
+        random.seed(seed)
+        self.examples: List[TrainingExample] = []
+
+    def generate_codeact_example(self) -> TrainingExample:
+        """Generate CodeAct (code generation + execution loop) example"""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Gangoos-coder, an expert coding agent using CodeAct pattern: generate code → execute → observe → iterate."
+            },
+            {
+                "role": "user",
+                "content": "Please build a CLI tool that converts CSV to JSON. Start with a basic implementation."
+            },
+            {
+                "role": "assistant",
+                "content": "I'll build a csv_json_converter implementation step by step.\n\n```python\nimport json\nimport csv\nfrom pathlib import Path\nfrom typing import Dict, List, Any\n\nclass CSVJsonConverter:\n    '''Main implementation for CSV to JSON conversion'''\n\n    def __init__(self):\n        self.errors = []\n\n    def process(self, input_file: str) -> Dict[str, Any]:\n        '''Process input and return results'''\n        try:\n            with open(input_file, 'r') as f:\n                data = json.load(f) if input_file.endswith('.json') else csv.DictReader(f)\n            return {\"status\": \"success\", \"data\": list(data)}\n        except Exception as e:\n            self.errors.append(str(e))\n            return {\"status\": \"error\", \"error\": str(e)}\n\nif __name__ == \"__main__\":\n    converter = CSVJsonConverter()\n    result = converter.process(\"input.csv\")\n    print(json.dumps(result, indent=2))\n```\n\nLet me test this implementation:"
+            },
+            {
+                "role": "user",
+                "content": "Great! Now test it with a sample CSV file and handle edge cases."
+            },
+            {
+                "role": "assistant",
+                "content": "Now I'll add comprehensive testing and edge case handling:\n\n```python\nimport json\nimport csv\nfrom pathlib import Path\nfrom typing import Dict, List, Any, Union\nimport tempfile\nimport os\n\nclass CSVJsonConverter:\n    '''Production-ready CSV to JSON converter with full error handling'''\n\n    def __init__(self, encoding: str = 'utf-8'):\n        self.encoding = encoding\n        self.errors: List[str] = []\n\n    def convert(self, input_file: str, output_file: str = None) -> Dict[str, Any]:\n        '''Convert CSV to JSON with validation'''\n        try:\n            if not Path(input_file).exists():\n                raise FileNotFoundError(f\"Input file not found: {input_file}\")\n\n            with open(input_file, 'r', encoding=self.encoding) as f:\n                reader = csv.DictReader(f)\n                rows = list(reader)\n\n            if not rows:\n                self.errors.append(\"CSV file is empty\")\n                return {\"status\": \"error\", \"rows\": 0}\n\n            output = json.dumps(rows, indent=2)\n\n            if output_file:\n                with open(output_file, 'w') as f:\n                    f.write(output)\n                return {\"status\": \"success\", \"rows\": len(rows), \"output_file\": output_file}\n\n            return {\"status\": \"success\", \"rows\": len(rows), \"data\": rows}\n\n        except Exception as e:\n            self.errors.append(str(e))\n            return {\"status\": \"error\", \"error\": str(e)}\n\n# Test with sample data\nif __name__ == \"__main__\":\n    converter = CSVJsonConverter()\n    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:\n        f.write(\"name,age,city\\n\")\n        f.write(\"Alice,30,NYC\\n\")\n        f.write(\"Bob,25,LA\\n\")\n        test_file = f.name\n    result = converter.convert(test_file, \"output.json\")\n    print(json.dumps(result, indent=2))\n    os.unlink(test_file)\n```\n\nAll edge cases handled: missing files, empty CSV, encoding errors. Tests pass."
+            }
+        ]
+        return TrainingExample(messages=messages)
+
+    def generate_rust_agent_example(self) -> TrainingExample:
+        """Generate Rust agent development example"""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Gangoos-coder specializing in Rust. Write memory-safe, idiomatic Rust with proper error handling."
+            },
+            {
+                "role": "user",
+                "content": "Build in Rust: Create a thread-safe cache using Arc and Mutex"
+            },
+            {
+                "role": "assistant",
+                "content": "I'll implement a production-grade thread_cache in Rust:\n\n```rust\nuse std::sync::Arc;\nuse tokio::sync::Mutex;\nuse std::collections::HashMap;\nuse std::time::{Duration, Instant};\n\ntype CacheStore = Arc<Mutex<HashMap<String, (String, Instant)>>>;\n\npub struct Cache {\n    store: CacheStore,\n    ttl: Duration,\n}\n\nimpl Cache {\n    pub fn new(ttl: Duration) -> Self {\n        Cache {\n            store: Arc::new(Mutex::new(HashMap::new())),\n            ttl,\n        }\n    }\n\n    pub async fn get(&self, key: &str) -> Option<String> {\n        let store = self.store.lock().await;\n        if let Some((value, inserted)) = store.get(key) {\n            if inserted.elapsed() < self.ttl {\n                return Some(value.clone());\n            }\n        }\n        None\n    }\n\n    pub async fn set(&self, key: String, value: String) {\n        let mut store = self.store.lock().await;\n        store.insert(key, (value, Instant::now()));\n    }\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[tokio::test]\n    async fn test_cache_retrieval() {\n        let cache = Cache::new(Duration::from_secs(10));\n        cache.set(\"key1\".to_string(), \"value1\".to_string()).await;\n        assert_eq!(cache.get(\"key1\").await, Some(\"value1\".to_string()));\n    }\n}\n```\n\nThis implements thread-safe caching with async support and TTL expiration."
+            }
+        ]
+        return TrainingExample(messages=messages)
+
+    def generate_mcp_server_example(self) -> TrainingExample:
+        """Generate MCP server development example"""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Gangoos-coder specializing in MCP (Model Context Protocol) servers."
+            },
+            {
+                "role": "user",
+                "content": "Create an MCP server that provides database query tools"
+            },
+            {
+                "role": "assistant",
+                "content": "I'll create a production-grade MCP server for database queries:\n\n```python\nfrom mcp.server import Server\nimport sqlite3\nimport json\nfrom typing import Any\n\nclass DatabaseMCPServer:\n    def __init__(self, db_path: str = \"default.db\"):\n        self.server = Server(\"database-tools\")\n        self.db_path = db_path\n        self.setup_tools()\n\n    def setup_tools(self):\n        @self.server.tool()\n        def execute_query(query: str, params: list = None) -> dict:\n            '''Execute SQL query safely'''\n            try:\n                conn = sqlite3.connect(self.db_path)\n                conn.row_factory = sqlite3.Row\n                cursor = conn.cursor()\n                cursor.execute(query, params or [])\n                results = [dict(row) for row in cursor.fetchall()]\n                conn.close()\n                return {\"status\": \"success\", \"rows\": len(results), \"data\": results}\n            except Exception as e:\n                return {\"status\": \"error\", \"error\": str(e)}\n\n        @self.server.tool()\n        def get_schema() -> dict:\n            '''Get database schema'''\n            try:\n                conn = sqlite3.connect(self.db_path)\n                cursor = conn.cursor()\n                cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")\n                tables = [row[0] for row in cursor.fetchall()]\n                schema = {}\n                for table in tables:\n                    cursor.execute(f\"PRAGMA table_info({table})\")\n                    schema[table] = [{\"name\": col[1], \"type\": col[2]} for col in cursor.fetchall()]\n                conn.close()\n                return {\"status\": \"success\", \"schema\": schema}\n            except Exception as e:\n                return {\"status\": \"error\", \"error\": str(e)}\n\n    async def run(self):\n        async with self.server:\n            await self.server.wait_for_shutdown()\n\nif __name__ == \"__main__\":\n    import asyncio\n    server = DatabaseMCPServer()\n    asyncio.run(server.run())\n```\n\nThis MCP server provides safe database query execution with schema introspection."
+            }
+        ]
+        return TrainingExample(messages=messages)
+
+    def generate_mojo_example(self) -> TrainingExample:
+        """Generate Mojo language example"""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert in Mojo, a high-performance Python dialect. Write idiomatic Mojo with proper type annotations."
+            },
+            {
+                "role": "user",
+                "content": "Create a high-performance vector dot product implementation in Mojo"
+            },
+            {
+                "role": "assistant",
+                "content": "I'll create an optimized vector dot product in Mojo:\n\n```mojo\nfrom math import sqrt\n\nstruct Vector:\n    var data: DynamicVector[Float32]\n    var size: Int\n\n    fn __init__(inout self, size: Int):\n        self.size = size\n        self.data = DynamicVector[Float32](size)\n\n    fn dot(self, other: Vector) -> Float32:\n        var result: Float32 = 0.0\n        for i in range(self.size):\n            result += self.data[i] * other.data[i]\n        return result\n\n    fn magnitude(self) -> Float32:\n        return sqrt(self.dot(self))\n\nfn main():\n    var v1 = Vector(1000)\n    var v2 = Vector(1000)\n    for i in range(v1.size):\n        v1.data[i] = i as Float32\n        v2.data[i] = (i * 2) as Float32\n    var dp = v1.dot(v2)\n    var mag = v1.magnitude()\n    print(f\"Dot product: {dp}\")\n    print(f\"Magnitude: {mag}\")\n```\n\nThis leverages Mojo's performance optimizations for fast numerical computing."
+            }
+        ]
+        return TrainingExample(messages=messages)
+
+    def generate_devops_example(self) -> TrainingExample:
+        """Generate DevOps/Docker example"""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Gangoos-coder with DevOps expertise. Create production-grade configurations."
+            },
+            {
+                "role": "user",
+                "content": "Create a Docker setup for a multi-service application with health checks"
+            },
+            {
+                "role": "assistant",
+                "content": "I'll create a production Docker setup:\n\n```yaml\nversion: '3.9'\nservices:\n  api:\n    build: ./api\n    ports:\n      - \"8000:8000\"\n    environment:\n      - DATABASE_URL=postgresql://user:pass@db:5432/app\n      - REDIS_URL=redis://cache:6379\n    depends_on:\n      db:\n        condition: service_healthy\n      cache:\n        condition: service_healthy\n    healthcheck:\n      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:8000/health\"]\n      interval: 10s\n      timeout: 5s\n      retries: 3\n    restart: unless-stopped\n\n  db:\n    image: postgres:15\n    environment:\n      POSTGRES_PASSWORD: securepass\n      POSTGRES_DB: app\n    volumes:\n      - db_data:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\n  cache:\n    image: redis:7-alpine\n    healthcheck:\n      test: [\"CMD\", \"redis-cli\", \"ping\"]\n      interval: 10s\n      timeout: 5s\n      retries: 3\n\nvolumes:\n  db_data:\n\nnetworks:\n  default:\n    name: app-network\n```\n\nThis configuration includes health checks, dependency management, and volume persistence."
+            }
+        ]
+        return TrainingExample(messages=messages)
+
+    def generate_security_example(self) -> TrainingExample:
+        """Generate Security/audit example"""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are Gangoos-coder with security expertise. Identify and fix vulnerabilities."
+            },
+            {
+                "role": "user",
+                "content": "Review this code for security vulnerabilities and suggest fixes"
+            },
+            {
+                "role": "assistant",
+                "content": "I'll conduct a security review and provide fixes:\n\nVULNERABLE CODE:\n```python\nfrom flask import Flask, request, jsonify\nimport pickle\nimport os\n\napp = Flask(__name__)\nSECRET_KEY = \"hardcoded-secret-123\"\n\n@app.route('/api/data', methods=['POST'])\ndef process_data():\n    data = pickle.loads(request.data)\n    query = f\"SELECT * FROM users WHERE id={data['id']}\"\n    return jsonify({\"api_key\": os.getenv('API_KEY'), \"data\": data})\n```\n\nFIXED VERSION:\n```python\nfrom flask import Flask, request, jsonify\nfrom flask_sqlalchemy import SQLAlchemy\nimport json\nimport os\nfrom functools import wraps\nimport logging\n\napp = Flask(__name__)\napp.config['SECRET_KEY'] = os.getenv('SECRET_KEY')\napp.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')\ndb = SQLAlchemy(app)\nlogger = logging.getLogger(__name__)\n\ndef validate_json(f):\n    @wraps(f)\n    def decorated(*args, **kwargs):\n        try:\n            request.get_json()\n        except:\n            return {\"error\": \"Invalid JSON\"}, 400\n        return f(*args, **kwargs)\n    return decorated\n\n@app.route('/api/data', methods=['POST'])\n@validate_json\ndef process_data():\n    data = request.get_json()\n    user = db.session.execute(\n        db.select(User).where(User.id == data.get('id'))\n    ).scalar_one_or_none()\n    return jsonify({\"status\": \"success\", \"user_id\": user.id if user else None})\n```\n\nKey fixes: (1) Secrets from env vars (2) JSON instead of pickle (3) Parameterized SQL (4) No sensitive data in responses (5) Input validation"
+            }
+        ]
+        return TrainingExample(messages=messages)
+
+    def generate_dataset(self, num_examples: int = 50) -> List[TrainingExample]:
+        """Generate complete dataset with domain distribution"""
+        distribution = {
+            TaskDomain.CODEACT: 15,
+            TaskDomain.RUST_AGENT: 10,
+            TaskDomain.MCP_SERVER: 10,
+            TaskDomain.MOJO: 5,
+            TaskDomain.DEVOPS: 5,
+            TaskDomain.SECURITY: 5,
+        }
+
+        generators = {
+            TaskDomain.CODEACT: self.generate_codeact_example,
+            TaskDomain.RUST_AGENT: self.generate_rust_agent_example,
+            TaskDomain.MCP_SERVER: self.generate_mcp_server_example,
+            TaskDomain.MOJO: self.generate_mojo_example,
+            TaskDomain.DEVOPS: self.generate_devops_example,
+            TaskDomain.SECURITY: self.generate_security_example,
+        }
+
+        examples = []
+        for domain, count in distribution.items():
+            for _ in range(count):
+                example = generators[domain]()
+                examples.append(example)
+
+        random.shuffle(examples)
+        return examples
+
+    def save_jsonl(self, examples: List[TrainingExample], filepath: str):
+        """Save examples to JSONL format"""
+        with open(filepath, 'w') as f:
+            for example in examples:
+                f.write(json.dumps(example.to_dict()) + '\n')
+
+        print(f"Saved {len(examples)} examples to {filepath}")
+
+    def validate_jsonl(self, filepath: str) -> bool:
+        """Validate JSONL format"""
+        try:
+            count = 0
+            with open(filepath, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        json.loads(line)
+                        count += 1
+            print(f"Valid JSONL: {count} examples")
+            return True
+        except json.JSONDecodeError as e:
+            print(f"Invalid JSONL: {e}")
+            return False
+
+
+if __name__ == "__main__":
+    generator = DatasetGenerator()
+    examples = generator.generate_dataset(50)
+
+    output_file = "gangoos_coder_dataset.jsonl"
+    generator.save_jsonl(examples, output_file)
+    generator.validate_jsonl(output_file)
+
+    print(f"\nDataset generated: {output_file}")
+    print(f"Total examples: {len(examples)}")
