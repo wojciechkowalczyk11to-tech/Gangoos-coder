@@ -87,12 +87,14 @@ impl CodeActExtension {
 
                 // Parse inner NEXUS response and re-wrap with metadata
                 // Non-JSON responses (e.g. HTML error pages) get exit_code -1 to avoid false success
-                let inner: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|_| {
-                    json!({ "stdout": "", "stderr": text, "exit_code": -1 })
-                });
+                let inner: serde_json::Value = serde_json::from_str(&text)
+                    .unwrap_or_else(|_| json!({ "stdout": "", "stderr": text, "exit_code": -1 }));
 
                 let exit_code = inner.get("exit_code").and_then(|v| v.as_i64()).unwrap_or(0);
-                let stdout = inner.get("stdout").and_then(|v| v.as_str()).unwrap_or(&text);
+                let stdout = inner
+                    .get("stdout")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&text);
                 let stderr = inner.get("stderr").and_then(|v| v.as_str()).unwrap_or("");
 
                 let success = status == 200 && exit_code == 0;
@@ -117,7 +119,11 @@ impl CodeActExtension {
                 Ok(result.to_string())
             }
             Err(e) => {
-                tracing::warn!("run_mojo: NEXUS request failed after {}ms: {}", elapsed_ms, e);
+                tracing::warn!(
+                    "run_mojo: NEXUS request failed after {}ms: {}",
+                    elapsed_ms,
+                    e
+                );
                 Err(anyhow::anyhow!(
                     "NEXUS connection failed after {}ms: {}",
                     elapsed_ms,
@@ -188,9 +194,11 @@ impl McpClientTrait for CodeActExtension {
                     )]));
                 }
                 if code.len() > MAX_CODE_SIZE {
-                    return Ok(CallToolResult::error(vec![Content::text(
-                        format!("run_mojo: code exceeds max size ({}B > {}B)", code.len(), MAX_CODE_SIZE),
-                    )]));
+                    return Ok(CallToolResult::error(vec![Content::text(format!(
+                        "run_mojo: code exceeds max size ({}B > {}B)",
+                        code.len(),
+                        MAX_CODE_SIZE
+                    ))]));
                 }
                 let timeout_secs = args
                     .get("timeout")
@@ -216,8 +224,9 @@ impl McpClientTrait for CodeActExtension {
 
     async fn get_moim(&self, session_id: &str) -> Option<String> {
         // Check if Context7 has a last query to give routing hints
-        let last_query = crate::agents::platform_extensions::context7::last_message::get(session_id)
-            .unwrap_or_default();
+        let last_query =
+            crate::agents::platform_extensions::context7::last_message::get(session_id)
+                .unwrap_or_default();
 
         // Tool routing guidance based on last user intent
         let routing_hint = classify_intent(&last_query);
@@ -287,7 +296,13 @@ mod tests {
         let moim = client.get_moim("test_session").await;
         assert!(moim.is_some());
         let text = moim.unwrap();
-        assert!(text.contains("CodeAct status"), "MOIM should contain status line");
-        assert!(text.contains("run_mojo"), "MOIM should reference run_mojo tool");
+        assert!(
+            text.contains("CodeAct status"),
+            "MOIM should contain status line"
+        );
+        assert!(
+            text.contains("run_mojo"),
+            "MOIM should reference run_mojo tool"
+        );
     }
 }
