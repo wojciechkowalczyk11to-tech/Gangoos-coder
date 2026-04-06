@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
 pub static EXTENSION_NAME: &str = "gangus_memory";
@@ -117,10 +117,10 @@ impl MemoryDatabase {
                     || v.value.to_lowercase().contains(&query_lower)
                     || v.notes
                         .as_ref()
-                        .map_or(false, |n| n.to_lowercase().contains(&query_lower))
+                        .is_some_and(|n| n.to_lowercase().contains(&query_lower))
                     || v.category
                         .as_ref()
-                        .map_or(false, |c| c.to_lowercase().contains(&query_lower))
+                        .is_some_and(|c| c.to_lowercase().contains(&query_lower))
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()

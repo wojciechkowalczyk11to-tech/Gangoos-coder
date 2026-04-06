@@ -9,7 +9,6 @@ use rmcp::model::{
 };
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -126,6 +125,7 @@ impl HooksConfig {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn get_hook(&self, name: &str) -> Option<&Hook> {
         self.hooks.get(name)
     }

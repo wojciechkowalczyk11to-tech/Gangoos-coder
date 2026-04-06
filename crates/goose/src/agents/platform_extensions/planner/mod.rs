@@ -9,8 +9,6 @@ use rmcp::model::{
 };
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -173,7 +171,7 @@ impl Plan {
         for entry in fs::read_dir(&plans_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "json") {
+            if path.extension().is_some_and(|ext| ext == "json") {
                 if let Ok(contents) = fs::read_to_string(&path) {
                     if let Ok(plan) = serde_json::from_str::<Plan>(&contents) {
                         plans.push(plan);
