@@ -51,6 +51,13 @@ class Settings:
     GITLAB_TOKEN: str = field(default_factory=lambda: os.getenv("GITLAB_TOKEN", ""))
     GITLAB_BASE_URL: str = field(default_factory=lambda: os.getenv("GITLAB_BASE_URL", "https://gitlab.com/api/v4"))
 
+    # Local LLM — Ollama (set OLLAMA_HOST in .env to point at your LLM host)
+    OLLAMA_HOST: str = field(default_factory=lambda: os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+    OLLAMA_DEFAULT_MODEL: str = field(default_factory=lambda: os.getenv("OLLAMA_DEFAULT_MODEL", "qwen3:8b"))
+
+    # Groq (fast inference)
+    GROQ_API_KEY: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
+
     # RunPod
     RUNPOD_API_KEY: str = field(default_factory=lambda: os.getenv("RUNPOD_API_KEY", ""))
     RUNPOD_TEMPLATE_ID: str = field(default_factory=lambda: os.getenv("RUNPOD_TEMPLATE_ID", ""))

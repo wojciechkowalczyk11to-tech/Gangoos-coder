@@ -1,36 +1,32 @@
-![CI](https://github.com/wojciechkowalczyk11to-tech/gangus-coder/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/wojciechkowalczyk11to-tech/Gangoos-coder/actions/workflows/ci.yml/badge.svg)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# gangus-coder
+# gangoos-coder
 
-`gangus-coder` is a Rust-based coding agent forked from [block/goose](https://github.com/block/goose), extended with a Mojo-oriented CodeAct flow and a bundled Python MCP server.
-
-The repository is being prepared as a single monorepo for:
-
-- the Rust agent and server
-- the Mojo-oriented CodeAct extension
-- the bundled `mcp-server/` service
-- training and knowledge assets used by the agent runtime
+`gangoos-coder` is a Rust-based coding agent forked from [block/goose](https://github.com/block/goose), extended with a Mojo-oriented CodeAct flow, a bundled 170-tool Python MCP server, and a local Qwen3:8b LLM integration.
 
 ---
 
 ## Monorepo layout
 
 ```
-gangus-coder/
+gangoos-coder/
   crates/           Rust agent, CLI, MCP and HTTP server
-  mcp-server/       Bundled Python MCP server
-  training/         Knowledge and dataset assets
+  mcp-server/       Bundled Python MCP server (170+ tools)
+  llm/              Local LLM config — Qwen3:8b via Ollama
   ui/               Frontend
-  documentation/    Docs site sources
 ```
 
 ## Runtime model strategy
 
-- Current default provider for local development: `xai`
-- Current default model for local development: `grok-4-1-fast-reasoning`
-- Planned later runtime: Qwen-based CodeAct worker on a dedicated VM
-- Verification helpers: Gemini and DeepSeek
+| Mode | Provider | Model |
+|------|----------|-------|
+| Default (cloud) | xAI | grok-4-1-fast-reasoning |
+| Local LLM | Ollama | qwen3:8b |
+| Fast inference | Groq | qwen-qwq-32b |
+| Verification | DeepSeek | deepseek-chat |
+
+Set `OLLAMA_HOST` in `.env` to point at a machine running `llm/setup.sh`.
 
 ## Architecture
 
@@ -97,14 +93,19 @@ The shared root `.env.example` contains variable names only. Populate values loc
 
 Key variables:
 
-- `GOOSE_PROVIDER`
-- `GOOSE_MODEL`
-- `XAI_API_KEY`
-- `GEMINI_API_KEY`
-- `DEEPSEEK_API_KEY`
-- `GITHUB_TOKEN`
-- `DIGITALOCEAN_TOKEN`
-- `NEXUS_AUTH_TOKEN`
+| Variable | Purpose |
+|----------|---------|
+| `GOOSE_PROVIDER` | Agent LLM provider (`xai`, `groq`, `deepseek`) |
+| `GOOSE_MODEL` | Model name |
+| `NEXUS_AUTH_TOKEN` | MCP server bearer token |
+| `OLLAMA_HOST` | Ollama endpoint, e.g. `http://localhost:11434` |
+| `OLLAMA_MODEL` | Ollama model name (default: `qwen3:8b`) |
+| `XAI_API_KEY` | xAI / Grok |
+| `GROQ_API_KEY` | Groq (fast inference) |
+| `DEEPSEEK_API_KEY` | DeepSeek |
+| `GEMINI_API_KEY` | Google Gemini |
+| `GITHUB_TOKEN` | GitHub API |
+| `DIGITALOCEAN_TOKEN` | DigitalOcean API |
 
 ## Contributing
 

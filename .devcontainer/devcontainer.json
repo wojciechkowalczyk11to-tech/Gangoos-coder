@@ -15,7 +15,7 @@
     },
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
-  "forwardPorts": [3000, 8080],
+  "forwardPorts": [3000, 8080, 11434],
   "portsAttributes": {
     "3000": {
       "label": "gangus-agent-api",
@@ -24,21 +24,35 @@
     "8080": {
       "label": "mcp-server",
       "onAutoForward": "notify"
+    },
+    "11434": {
+      "label": "ollama-llm",
+      "onAutoForward": "silent"
     }
   },
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
+        "ms-python.black-formatter",
         "rust-lang.rust-analyzer",
-        "vadimcn.vscode-lldb"
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "ms-azuretools.vscode-docker",
+        "GitHub.copilot"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer"
+        },
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter"
+        }
       }
     }
   },
-  "postCreateCommand": "cargo fetch && python3 -m pip install --upgrade pip && python3 -m pip install -r mcp-server/requirements.txt && cargo build --package goose-cli --package goose-server && (command -v mojo >/dev/null 2>&1 && mojo --version || echo 'Mojo SDK not available in this Codespace; skipping installation.')",
+  "postCreateCommand": "bash .devcontainer/setup.sh",
   "remoteUser": "vscode"
 }
-  

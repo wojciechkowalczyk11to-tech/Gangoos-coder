@@ -188,6 +188,35 @@ if os.getenv("RUNPOD_API_KEY"):
 else:
     log.info("RunPod suite skipped (RUNPOD_API_KEY not set)")
 
+# ── E1-E4 Enhancements ───────────────────────────────────────────────────────
+try:
+    from modules.plan_verifier import register as register_plan_verifier
+    register_plan_verifier(mcp)
+    log.info("E1: plan verifier loaded")
+except Exception as e:
+    log.info(f"E1: plan verifier skipped: {e}")
+
+try:
+    from modules.streaming import register as register_streaming
+    register_streaming(mcp)
+    log.info("E2: streaming loaded")
+except Exception as e:
+    log.info(f"E2: streaming skipped: {e}")
+
+try:
+    from modules.session_store import register as register_session_store
+    register_session_store(mcp)
+    log.info("E3: session store loaded")
+except Exception as e:
+    log.info(f"E3: session store skipped: {e}")
+
+try:
+    from modules.dataset_filter import register as register_dataset_filter
+    register_dataset_filter(mcp)
+    log.info("E4: dataset filter loaded")
+except Exception as e:
+    log.info(f"E4: dataset filter skipped: {e}")
+
 log.info("All modules registered")
 
 
