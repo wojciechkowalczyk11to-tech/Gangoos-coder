@@ -1,102 +1,143 @@
-# GitHub Copilot Code Review Instructions
+# Gangoos-coder — Copilot Agent Instructions
 
-## Review Philosophy
-- Only comment when you have HIGH CONFIDENCE (>80%) that an issue exists
-- Be concise: one sentence per comment when possible
-- Focus on actionable feedback, not observations
-- When reviewing text, only comment on clarity issues if the text is genuinely confusing or could lead to errors. "Could be clearer" is not the same as "is confusing" - stay silent unless HIGH confidence it will cause problems
+> Model: claude-opus-4-5 | Mode: extended thinking | Env: GitHub Codespaces
 
-## Priority Areas (Review These)
+## Co budujesz
 
-### Security & Safety
-- Unsafe code blocks without justification
-- Command injection risks (shell commands, user input)
-- Path traversal vulnerabilities
-- Credential exposure or hardcoded secrets
-- Missing input validation on external data
-- Improper error handling that could leak sensitive info
+**Gangoos-coder** — Rust AI coding agent (fork goose) + 170-tool Python MCP server + Qwen3:8b LLM.
+Cel: 300+ testów passing, zero red, dużo commitów → potem transfer do czystej org repo.
 
-### Correctness Issues
-- Logic errors that could cause panics or incorrect behavior
-- Race conditions in async code
-- Resource leaks (files, connections, memory)
-- Off-by-one errors or boundary conditions
-- Incorrect error propagation (using `unwrap()` inappropriately)
-- Optional types that don't need to be optional
-- Booleans that should default to false but are set as optional
-- Error context that doesn't add useful information (e.g., `.context("Failed to do X")` when error already says it failed)
-- Overly defensive code that adds unnecessary checks
-- Unnecessary comments that just restate what the code already shows (remove them)
+## Struktura monorepo
 
-### Architecture & Patterns
-- Code that violates existing patterns in the codebase
-- Missing error handling (should use `anyhow::Result`)
-- Async/await misuse or blocking operations in async contexts
-- Improper trait implementations
-
-### No Doc Updates with Code Changes
-- PRs with code changes shouldn't update `/documentation` - docs deploy on merge, code on release. Use `unlisted: true` or remove/hide docs.
-
-## Project-Specific Context
-
-- This is a Rust project using cargo workspaces
-- Core crates: `goose` (agent logic), `goose-cli` (CLI), `goose-server` (backend), `goose-mcp` (MCP servers)
-- Error handling: Use `anyhow::Result`, not `unwrap()` in production code
-- Async runtime: tokio
-- MCP protocol implementations require extra scrutiny
-- Naming convention: In `documentation/docs` and `documentation/blog`, always refer to the project as "goose" (lowercase), never "Goose" (even at the start of sentences)
-
-## CI Pipeline Context
-
-**Important**: You review PRs immediately, before CI completes. Do not flag issues that CI will catch.
-
-### What Our CI Checks (`.github/workflows/ci.yml`)
-
-**Rust checks:**
-- `cargo fmt --check` - Code formatting (rustfmt)
-- `cargo test --jobs 2` - All tests
-- `cargo clippy --all-targets -- -D warnings` - Linting (clippy)
-- `just check-openapi-schema` - OpenAPI schema validation
-
-**Desktop app checks:**
-- `pnpm install --frozen-lockfile` - Fresh dependency install (in `ui/desktop/`)
-- `pnpm run lint:check` - ESLint + Prettier
-- `pnpm run test:run` - Vitest tests
-
-**Setup steps CI performs:**
-- Installs system dependencies (libdbus, gnome-keyring, libxcb)
-- Activates hermit environment (`source bin/activate-hermit`)
-- Caches Cargo and pnpm dependencies
-- Runs `pnpm install --frozen-lockfile` before any pnpm scripts (ensures all packages are installed)
-
-**Key insight**: Commands like `npx` check local `node_modules` first, which CI installs via `pnpm install --frozen-lockfile`. Don't flag these as broken unless you can explain why CI setup wouldn't handle it.
-
-## Skip These (Low Value)
-
-Do not comment on:
-- **Style/formatting** - CI handles this (rustfmt, prettier)
-- **Clippy warnings** - CI handles this (clippy)
-- **Test failures** - CI handles this (full test suite)
-- **Missing dependencies** - CI handles this (pnpm install will fail)
-- **Minor naming suggestions** - unless truly confusing
-- **Suggestions to add comments** - for self-documenting code
-- **Refactoring suggestions** - unless there's a clear bug or maintainability issue
-- **Multiple issues in one comment** - choose the single most critical issue
-- **Logging suggestions** - unless for errors or security events (the codebase needs less logging, not more)
-- **Pedantic accuracy in text** - unless it would cause actual confusion or errors. No one likes a reply guy
-
-## Response Format
-
-When you identify an issue:
-1. **State the problem** (1 sentence)
-2. **Why it matters** (1 sentence, only if not obvious)
-3. **Suggested fix** (code snippet or specific action)
-
-Example:
 ```
-This could panic if the vector is empty. Consider using `.get(0)` or add a length check.
+Gangoos-coder/
+├── crates/
+│   ├── goose/            ← core agent (Rust)
+│   ├── goose-cli/        ← binary: goose
+│   ├── goose-server/     ← binary: goosed (HTTP API)
+│   ├── goose-mcp/        ← MCP extensions
+│   ├── goose-acp/        ← Agent Client Protocol
+│   ├── goose-acp-macros/ ← proc macros
+│   ├── goose-test/       ← test utilities
+│   └── goose-test-support/
+├── mcp-server/           ← 170+ tools, Python FastMCP
+│   ├── server.py
+│   ├── rest_gateway.py   ← /tools/call + /mojo_exec
+│   ├── config.py
+│   ├── modules/          ← jeden plik per tool group
+│   └── tests/            ← pytest (cel: 130+ testów)
+├── llm/                  ← Qwen3:8b via Ollama
+│   ├── Modelfile
+│   ├── config.yaml
+│   └── client.py
+├── knowledge/            ← hacker-laws KB + context7
+│   └── tests/
+├── training/             ← fine-tune pipeline Mojo/RunPod
+│   ├── pipeline/
+│   ├── data/
+│   └── scripts/
+├── docker-compose.yml
+└── pytest.ini
 ```
 
-## When to Stay Silent
+## Infrastruktura (zawsze przez env vars, nigdy hardcode)
 
-If you're uncertain whether something is an issue, don't comment. False positives create noise and reduce trust in the review process.
+| VM | Env var | Co robi |
+|----|---------|---------|
+| VM1 | `GANGOOS_VM1_HOST` | MCP server :8080, agent :3000 |
+| VM2 | `OLLAMA_HOST` | Qwen3:8b Ollama :11434 |
+
+## Aktualny stan CI
+
+| Check | Stan |
+|-------|------|
+| cargo fmt | ✅ |
+| cargo check | ✅ |
+| cargo clippy -D warnings | ✅ |
+| cargo test -p goose | ✅ (mało testów) |
+| pytest (39 testów) | ✅ |
+| docker compose config | ✅ |
+| secret-scan | ✅ |
+
+## Plan: 300+ testów, zero red
+
+### Rust — cel 150 testów
+
+Gdzie pisać: `crates/*/tests/` i `#[cfg(test)]` moduły inline
+
+Priorytety:
+1. `crates/goose/src/agents/` — state machine, tool routing, context mgmt
+2. `crates/goose/src/providers/` — Provider trait, parsowanie odpowiedzi
+3. `crates/goose-mcp/` — rejestracja narzędzi, dispatch
+4. `crates/goose-server/src/routes/` — każdy endpoint (axum::test)
+5. `crates/goose-acp/` — serializacja ACP schema
+6. `crates/goose/src/context_mgmt/` — token budget, pruning
+
+Zasady:
+- `#[tokio::test]` dla async
+- mockall lub ręczne test doubles — zero real API calls
+- proptest dla parserów i serializerów
+- Każda publiczna funkcja = min 1 test
+
+### Python — cel 130 testów
+
+Gdzie pisać: `mcp-server/tests/`, `knowledge/tests/`
+
+Priorytety:
+1. Każdy tool w `mcp-server/modules/` — 3 testy (happy, bad input, edge)
+2. `rest_gateway.py` — wszystkie route'y + /tools/call + /mojo_exec
+3. `server.py` lifespan — startup, shutdown, config injection
+4. `config.py` — env parsing, defaults, missing required
+5. `llm/client.py` — timeout, retry, fallback
+6. `knowledge/` — KB lookup, hacker-laws, context7 detection
+
+Zasady:
+- pytest + pytest-asyncio + httpx.AsyncClient
+- Mockuj zewnętrzny HTTP z respx lub unittest.mock
+- @pytest.mark.parametrize — min 50 sparametryzowanych cases
+- Fixtures w conftest.py
+
+### UI — cel 20 testów
+
+`ui/desktop/` — pnpm test (Vitest)
+
+## Kolejność roboty
+
+1. Rozszerz testy Rust — dodaj 100+ w crates/goose/tests/
+2. Rozszerz testy Python — pokryj wszystkie 170+ MCP tools
+3. Napraw każdy czerwony test — zero red to warunek konieczny
+4. Dodaj testy UI — Vitest components
+5. Ulepsz CI — coverage report, matrix builds
+6. Security — cargo deny check + pip-audit
+7. Training pipeline — dokoncz training/pipeline/ dla Qwen fine-tune
+8. README — screenshoty, badge CI, architektura diagram
+9. Release prep — tag v1.0.0, CHANGELOG
+
+## Zasady kodu (z AGENTS.md)
+
+- Samodokumentujący kod — dobre nazwy > komentarze
+- Komentarze tylko dla nieoczywistej logiki biznesowej
+- `anyhow::Result` dla błędów Rust
+- Ufaj systemowi typów Rust — nie bądź defensywny
+- Nie dodawaj logów — chyba że error lub security event
+- Nigdy nie edytuj `ui/desktop/openapi.json` ręcznie
+- Zawsze `cargo add` zamiast ręcznej edycji Cargo.toml
+- Zawsze `cargo fmt` przed commitem
+
+## Commit discipline
+
+```
+type(scope): message
+```
+- feat / fix / test / refactor / ci / docs
+- DCO: `git commit -s`
+- Nigdy: .env, prywatne IPs, tokeny API
+- Jeden commit per logiczna jednostka pracy
+
+## Czego NIE robić
+
+- Nie hardcoduj IP, tokenów, haseł
+- Nie zostawiaj TODO/FIXME — napraw od razu
+- Nie dodawaj ficzerów spoza planu
+- Nie skipuj czerwonych testów
+- Nie amenduj publicznych commitów
