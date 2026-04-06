@@ -23,7 +23,6 @@ if command -v mojo &>/dev/null; then
 fi
 
 echo "=== [6/6] Env validation ==="
-# Print which env vars are set (names only, no values)
 for var in NEXUS_AUTH_TOKEN OLLAMA_HOST NEXUS_MCP_URL GOOSE_PROVIDER GOOSE_MODEL; do
   if [ -n "${!var}" ]; then
     echo "  ✓ $var"
@@ -32,17 +31,15 @@ for var in NEXUS_AUTH_TOKEN OLLAMA_HOST NEXUS_MCP_URL GOOSE_PROVIDER GOOSE_MODEL
   fi
 done
 
-# Load .env if present (for local Codespace)
 if [ -f .env ]; then
   echo "  .env found — loading"
   set -a; source .env; set +a
 fi
 
-# Quick connectivity test
 echo ""
 echo "=== Connectivity checks ==="
-MCP_URL="${NEXUS_MCP_URL:-http://46.101.108.96:8080}"
-OLLAMA="${OLLAMA_HOST:-http://164.90.217.149:11434}"
+MCP_URL="${NEXUS_MCP_URL:?Set NEXUS_MCP_URL in Codespaces secrets}"
+OLLAMA="${OLLAMA_HOST:?Set OLLAMA_HOST in Codespaces secrets}"
 
 if curl -sf --connect-timeout 5 "$MCP_URL/health" > /dev/null 2>&1; then
   TOOLS=$(curl -sf "$MCP_URL/health" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tools_registered','?'))" 2>/dev/null)

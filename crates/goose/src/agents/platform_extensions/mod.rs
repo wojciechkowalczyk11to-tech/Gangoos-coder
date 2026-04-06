@@ -1,22 +1,22 @@
 pub mod analyze;
 pub mod apps;
-pub mod codeact;
 pub mod chatrecall;
+#[cfg(feature = "code-mode")]
+pub mod code_execution;
+pub mod codeact;
 pub mod context7;
+pub mod developer;
+pub mod ext_manager;
 pub mod gangus_memory;
 pub mod git_aware;
 pub mod hooks;
-pub mod planner;
-pub mod watcher;
-#[cfg(feature = "code-mode")]
-pub mod code_execution;
-pub mod developer;
-pub mod ext_manager;
 pub mod orchestrator;
+pub mod planner;
 pub mod summarize;
 pub mod summon;
 pub mod todo;
 pub mod tom;
+pub mod watcher;
 
 use std::collections::HashMap;
 
@@ -201,7 +201,8 @@ pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>
             PlatformExtensionDef {
                 name: watcher::EXTENSION_NAME,
                 display_name: "Watcher",
-                description: "Tracks file changes in working directory and injects diff summary every turn",
+                description:
+                    "Tracks file changes in working directory and injects diff summary every turn",
                 default_enabled: true,
                 unprefixed_tools: false,
                 hidden: false,
@@ -214,7 +215,8 @@ pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>
             PlatformExtensionDef {
                 name: git_aware::EXTENSION_NAME,
                 display_name: "Git Aware",
-                description: "Injects git branch, staged/unstaged counts, and last commit into every turn",
+                description:
+                    "Injects git branch, staged/unstaged counts, and last commit into every turn",
                 default_enabled: true,
                 unprefixed_tools: false,
                 hidden: false,
@@ -231,7 +233,9 @@ pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>
                 default_enabled: true,
                 unprefixed_tools: false,
                 hidden: false,
-                client_factory: |ctx| Box::new(gangus_memory::GangusMemoryClient::new(ctx).unwrap()),
+                client_factory: |ctx| {
+                    Box::new(gangus_memory::GangusMemoryClient::new(ctx).unwrap())
+                },
             },
         );
 
@@ -253,7 +257,8 @@ pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>
             PlatformExtensionDef {
                 name: planner::EXTENSION_NAME,
                 display_name: "Planner",
-                description: "Multi-step plan tracker with set_plan / advance_plan / clear_plan tools",
+                description:
+                    "Multi-step plan tracker with set_plan / advance_plan / clear_plan tools",
                 default_enabled: false,
                 unprefixed_tools: false,
                 hidden: false,
@@ -266,7 +271,8 @@ pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>
             PlatformExtensionDef {
                 name: codeact::EXTENSION_NAME,
                 display_name: "CodeAct",
-                description: "Execute Mojo code via NEXUS MCP mojo_exec — first Mojo-native agent runtime",
+                description:
+                    "Execute Mojo code via NEXUS MCP mojo_exec — first Mojo-native agent runtime",
                 default_enabled: false,
                 unprefixed_tools: false,
                 hidden: false,

@@ -1,19 +1,21 @@
 services:
-  gangus-agent:
+  gangoos-agent:
     build:
       context: .
       dockerfile: Dockerfile
     entrypoint: ["/usr/local/bin/goosed"]
     command: ["agent"]
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       GOOSE_HOST: ${GOOSE_HOST:-0.0.0.0}
       GOOSE_PORT: ${GOOSE_PORT:-3000}
       GOOSE_TLS: ${GOOSE_TLS:-false}
-      GOOSE_PROVIDER: ${GOOSE_PROVIDER:-xai}
-      GOOSE_MODEL: ${GOOSE_MODEL:-grok-4-1-fast-reasoning}
+      GOOSE_PROVIDER: ${GOOSE_PROVIDER:-ollama}
+      GOOSE_MODEL: ${GOOSE_MODEL:-qwen3:8b}
       NEXUS_URL: ${NEXUS_URL:-http://mcp-server:8080}
+      OLLAMA_HOST: ${OLLAMA_HOST}
     ports:
       - "3000:3000"
     depends_on:
@@ -27,26 +29,20 @@ services:
       context: ./mcp-server
       dockerfile: Dockerfile
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       PORT: ${PORT:-8080}
-      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,mcp-server,gangus-agent}
-      # Qwen3:8b — set OLLAMA_HOST in .env to point at your LLM host
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,mcp-server,gangoos-agent}
       OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
-      # Canonical env var name is OLLAMA_MODEL (not OLLAMA_DEFAULT_MODEL)
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
       MOJO_EXEC_BACKEND: ${MOJO_EXEC_BACKEND:-disabled}
     ports:
       - "8080:8080"
     volumes:
       - ./:/workspace
-      # docker socket is NOT mounted by default — no silent host-control.
-      # Use: docker compose -f docker-compose.yml -f docker-compose.privileged.yml up
-      # if shell/docker tools require host Docker access.
     working_dir: /app
 
-  # ── Qwen3:8b — local dev only (production: gangus-llm VM) ───────────────
-  # docker-compose --profile llm up   (only when running locally)
   ollama:
     profiles: ["llm"]
     image: ollama/ollama:latest
@@ -58,7 +54,6 @@ services:
     environment:
       OLLAMA_HOST: "0.0.0.0:11434"
     restart: unless-stopped
-    # After first start: docker exec <container> ollama create gangus -f /tmp/Modelfile
 
 volumes:
   ollama_data:

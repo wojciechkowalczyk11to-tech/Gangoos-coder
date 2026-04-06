@@ -21,11 +21,10 @@ pub struct GitAwareClient {
 impl GitAwareClient {
     pub fn new(_context: PlatformExtensionContext) -> Result<Self> {
         Ok(Self {
-            info: InitializeResult::new(ServerCapabilities::builder().build())
-                .with_server_info(
-                    Implementation::new(EXTENSION_NAME.to_string(), "1.0.0".to_string())
-                        .with_title("Git Aware"),
-                ),
+            info: InitializeResult::new(ServerCapabilities::builder().build()).with_server_info(
+                Implementation::new(EXTENSION_NAME.to_string(), "1.0.0".to_string())
+                    .with_title("Git Aware"),
+            ),
         })
     }
 }
@@ -62,11 +61,16 @@ impl McpClientTrait for GitAwareClient {
     }
 
     async fn get_moim(&self, _session_id: &str) -> Option<String> {
-        let working_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let working_dir =
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let summary = repo_map::get_repo_summary(&working_dir)?;
         Some(format!(
             "Branch: {} | Staged: {} | Unstaged: {} | Untracked: {} | Last commit: {}",
-            summary.branch, summary.staged, summary.unstaged, summary.untracked, summary.last_commit
+            summary.branch,
+            summary.staged,
+            summary.unstaged,
+            summary.untracked,
+            summary.last_commit
         ))
     }
 }

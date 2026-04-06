@@ -29,11 +29,10 @@ impl WatcherClient {
     pub fn new(_context: PlatformExtensionContext) -> Result<Self> {
         let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Ok(Self {
-            info: InitializeResult::new(ServerCapabilities::builder().build())
-                .with_server_info(
-                    Implementation::new(EXTENSION_NAME.to_string(), "1.0.0".to_string())
-                        .with_title("Workspace Watcher"),
-                ),
+            info: InitializeResult::new(ServerCapabilities::builder().build()).with_server_info(
+                Implementation::new(EXTENSION_NAME.to_string(), "1.0.0".to_string())
+                    .with_title("Workspace Watcher"),
+            ),
             daemon: Arc::new(WatcherDaemon::new(working_dir)),
         })
     }
@@ -82,7 +81,7 @@ impl McpClientTrait for WatcherClient {
                 ChangeType::New => "NEW",
                 ChangeType::Modified => "MODIFIED",
             };
-            lines.push(format!("  • {} {}", label, change.path.display()));
+            lines.push(format!("  \u{2022} {} {}", label, change.path.display()));
         }
         if changes.len() > 20 {
             lines.push(format!("  ... and {} more", changes.len() - 20));

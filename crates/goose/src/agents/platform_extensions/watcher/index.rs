@@ -34,7 +34,14 @@ impl WorkspaceIndex {
         let mut current_state = HashMap::new();
         // Clone root to avoid borrow conflict (&mut self + &self.root)
         let root = self.root.clone();
-        scan_dir(&root, &root, &self.previous_state, &mut current_state, &mut changes, 0);
+        scan_dir(
+            &root,
+            &root,
+            &self.previous_state,
+            &mut current_state,
+            &mut changes,
+            0,
+        );
         self.previous_state = current_state;
         changes
     }
@@ -70,7 +77,14 @@ fn scan_dir(
                     continue;
                 }
             }
-            scan_dir(&path, root, previous_state, current_state, changes, depth + 1);
+            scan_dir(
+                &path,
+                root,
+                previous_state,
+                current_state,
+                changes,
+                depth + 1,
+            );
         } else {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 if name.ends_with(".lock") {
