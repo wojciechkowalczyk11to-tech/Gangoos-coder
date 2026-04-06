@@ -1,7 +1,0 @@
-{
-  "vm": "gangus-coder",
-  "ip": "46.101.108.96",
-  "role": "core-agent + mcp-server",
-  "services": ["mcp-server:8080", "ssh:22"],
-  "stack": ["python3.12", "rust-1.94", "fastmcp", "170-tools"]
-}

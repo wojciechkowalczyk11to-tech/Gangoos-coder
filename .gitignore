@@ -2,6 +2,11 @@ __pycache__
 *.pyc
 *.jar
 run_cli.sh
+
+# VM runtime state — never commit IPs or node-specific data
+.vm-state/
+.env
+*.env.local
 tokenizer_files/
 .DS_Store
 .idea

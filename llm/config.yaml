@@ -1,17 +1,17 @@
 # Gangus LLM — Qwen3:8b via Ollama
-# Running on gangus-llm VM (164.90.217.149)
-# Configure via env vars — never hardcode IPs
+# Configure via env vars — never hardcode IPs or tokens
+# Set OLLAMA_HOST in your .env file
 
 ollama:
-  host: "${OLLAMA_HOST:-http://164.90.217.149:11434}"
+  host: "${OLLAMA_HOST:-http://localhost:11434}"
   model: "${OLLAMA_MODEL:-gangus}"          # custom Modelfile variant
   fallback_model: "qwen3:8b"               # base model if Modelfile not loaded
   timeout: 120
   context_length: 32768
 
-# MCP server connection (gangus-coder VM)
+# MCP server connection
 mcp:
-  url: "${MCP_URL:-http://46.101.108.96:8080/mcp}"
+  url: "${MCP_URL:-http://localhost:8080/mcp}"
   auth_token: "${NEXUS_AUTH_TOKEN}"
 
 # Inference settings

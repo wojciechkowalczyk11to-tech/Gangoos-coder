@@ -1,6 +1,6 @@
 #!/bin/bash
-# Setup Qwen3:8b on gangus-llm VM
-# Run this on the LLM VM (164.90.217.149)
+# Setup Qwen3:8b on a dedicated LLM host
+# Run on the machine that will serve Ollama
 set -e
 
 echo "Installing Ollama..."

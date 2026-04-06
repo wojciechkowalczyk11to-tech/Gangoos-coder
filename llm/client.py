@@ -8,7 +8,7 @@ import asyncio
 from typing import AsyncIterator
 
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://164.90.217.149:11434")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
