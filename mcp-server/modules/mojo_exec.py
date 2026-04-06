@@ -29,6 +29,13 @@ MOJO_TIMEOUT = int(os.getenv("MOJO_EXEC_TIMEOUT", "30"))
 MAX_CODE_SIZE = 64 * 1024  # 64KB
 
 
+class MojoExecInput(BaseModel):
+    """Input model for mojo_exec tool — exported at module level for test access."""
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    code: str = Field(..., description="Mojo source code to execute", min_length=1)
+    timeout: int = Field(MOJO_TIMEOUT, description="Execution timeout in seconds", ge=1, le=120)
+
+
 async def _exec_mojo_subprocess(code: str, timeout: int) -> dict:
     """Run Mojo code in a temp file via subprocess. Returns {stdout, stderr, exit_code}."""
     with tempfile.NamedTemporaryFile(suffix=".mojo", mode="w", delete=False) as f:
@@ -65,11 +72,6 @@ async def _exec_mojo_subprocess(code: str, timeout: int) -> dict:
 
 def register(mcp: FastMCP):
 
-    class MojoExecInput(BaseModel):
-        model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-        code: str = Field(..., description="Mojo source code to execute", min_length=1)
-        timeout: int = Field(MOJO_TIMEOUT, description="Execution timeout in seconds", ge=1, le=120)
-
     @mcp.tool(
         name="mojo_exec",
         annotations={
@@ -97,7 +99,7 @@ def register(mcp: FastMCP):
         if MOJO_EXEC_BACKEND == "disabled":
             return (
                 "mojo_exec: Mojo SDK not available on this host.\n"
-                "To enable: install Mojo SDK, set MOJO_EXEC_BACKEND=subprocess, "
+                "To enable: set MOJO_EXEC_BACKEND=subprocess, install Mojo SDK, "
                 "ensure `mojo` binary is in PATH.\n"
                 "Alternatively, use python_repl or shell for non-Mojo code execution."
             )

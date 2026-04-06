@@ -1,0 +1,79 @@
+# ── Remote 2-VM deployment topology ──────────────────────────────────────────
+#
+# VM1 (this file): gangus-agent + mcp-server
+# VM2 (separate):  ollama + qwen3:8b  (NOT in this file — referenced via OLLAMA_HOST)
+#
+# Usage:
+#   1. On VM2: pull model and start ollama
+#        docker run -d -p 11434:11434 ollama/ollama:latest
+#        docker exec <container> ollama pull qwen3:8b
+#
+#   2. On VM1: copy .env.remote → .env, set OLLAMA_HOST to VM2 address, then:
+#        docker compose -f docker-compose.remote.yml up -d
+#
+# Required env vars (set in .env):
+#   NEXUS_AUTH_TOKEN   — Bearer token for MCP REST gateway
+#   NEXUS_URL          — URL of mcp-server from agent's perspective (http://mcp-server:8080)
+#   OLLAMA_HOST        — VM2 Ollama endpoint (e.g. http://<vm2-private-ip>:11434)
+#   OLLAMA_MODEL       — Model name on VM2 (default: qwen3:8b)
+#   GOOSE_PROVIDER     — LLM provider for agent (default: xai)
+#   GOOSE_MODEL        — Model name for agent (default: grok-4-1-fast-reasoning)
+#
+# There is NO ollama service in this file.
+# If OLLAMA_HOST is unreachable, llm/client.py falls back to GROQ_API_KEY → DEEPSEEK_API_KEY.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  gangus-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/goosed"]
+    command: ["agent"]
+    env_file:
+      - .env
+    environment:
+      GOOSE_HOST: ${GOOSE_HOST:-0.0.0.0}
+      GOOSE_PORT: ${GOOSE_PORT:-3000}
+      GOOSE_TLS: ${GOOSE_TLS:-false}
+      GOOSE_PROVIDER: ${GOOSE_PROVIDER:-xai}
+      GOOSE_MODEL: ${GOOSE_MODEL:-grok-4-1-fast-reasoning}
+      NEXUS_URL: ${NEXUS_URL:-http://mcp-server:8080}
+    ports:
+      - "3000:3000"
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace
+    restart: unless-stopped
+
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      PORT: ${PORT:-8080}
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,mcp-server,gangus-agent}
+      # VM2 Ollama endpoint — set OLLAMA_HOST in .env to point at VM2 (no hardcoded IPs)
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://localhost:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      MOJO_EXEC_BACKEND: ${MOJO_EXEC_BACKEND:-disabled}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /app
+    restart: unless-stopped
+
+# No ollama service — it runs on VM2.
+# No volumes needed for ollama on VM1.
