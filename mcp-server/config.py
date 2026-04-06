@@ -1,17 +1,56 @@
 """
 NEXUS MCP Server - Configuration
-All secrets from environment variables. Never hardcode.
+All secrets from environment variables. Never hardcode credentials or identifiers.
 """
 
+import logging
 import os
+import sys
 from dataclasses import dataclass, field
 
+log = logging.getLogger("nexus-mcp.config")
+
+
+# ── Strict parsers ────────────────────────────────────────────────────────────
+
+def _parse_port(raw: str) -> int:
+    """Parse PORT env var strictly. Raises ValueError on invalid input."""
+    try:
+        port = int(raw)
+    except (ValueError, TypeError):
+        raise ValueError(f"PORT must be an integer, got {raw!r}")
+    if not (1 <= port <= 65535):
+        raise ValueError(f"PORT must be 1–65535, got {port}")
+    return port
+
+
+def _parse_url(value: str, field_name: str) -> str:
+    """Validate that a URL starts with http:// or https://. Empty string is allowed (disabled)."""
+    if value and not (value.startswith("http://") or value.startswith("https://")):
+        raise ValueError(
+            f"{field_name} must start with 'http://' or 'https://', got {value!r}"
+        )
+    return value
+
+
+def _parse_allowed_hosts(value: str) -> str:
+    """Validate ALLOWED_SSH_HOSTS: must not be empty, must not be a wildcard."""
+    if not value.strip():
+        raise ValueError("ALLOWED_SSH_HOSTS must not be empty")
+    hosts = [h.strip() for h in value.split(",") if h.strip()]
+    if "*" in hosts:
+        raise ValueError("ALLOWED_SSH_HOSTS must not contain wildcard '*'")
+    return value
+
+
+# ── Settings dataclass ────────────────────────────────────────────────────────
 
 @dataclass
 class Settings:
-    """All config from env vars with sensible defaults."""
+    """All config from env vars with safe defaults. No credentials or identifiers hardcoded."""
 
-    # Auth
+    # Auth — REQUIRED for protected endpoints.
+    # Empty means all protected routes return 503 (safe failure, not open access).
     AUTH_TOKEN: str = field(default_factory=lambda: os.getenv("NEXUS_AUTH_TOKEN", ""))
 
     # AI Providers
@@ -27,18 +66,14 @@ class Settings:
     GCP_PROJECT_ID: str = field(default_factory=lambda: os.getenv("GCP_PROJECT_ID", ""))
     GCP_ZONE: str = field(default_factory=lambda: os.getenv("GCP_ZONE", "europe-central2-a"))
 
-    # Cloudflare
+    # Cloudflare — no hardcoded account IDs; must be set explicitly in .env
     CLOUDFLARE_API_TOKEN: str = field(default_factory=lambda: os.getenv("CLOUDFLARE_API_TOKEN", ""))
-    CLOUDFLARE_ACCOUNT_ID: str = field(
-        default_factory=lambda: os.getenv("CLOUDFLARE_ACCOUNT_ID", "c263403c94461a2bb3c5564fce8762a5")
-    )
+    CLOUDFLARE_ACCOUNT_ID: str = field(default_factory=lambda: os.getenv("CLOUDFLARE_ACCOUNT_ID", ""))
     CLOUDFLARE_ZONE_ID: str = field(default_factory=lambda: os.getenv("CLOUDFLARE_ZONE_ID", ""))
 
-    # GitHub
+    # GitHub — no hardcoded owner; must be set explicitly in .env
     GITHUB_TOKEN: str = field(default_factory=lambda: os.getenv("GITHUB_TOKEN", ""))
-    GITHUB_OWNER: str = field(
-        default_factory=lambda: os.getenv("GITHUB_OWNER", "wojciechkowalczyk11to-tech")
-    )
+    GITHUB_OWNER: str = field(default_factory=lambda: os.getenv("GITHUB_OWNER", ""))
 
     # Vercel
     VERCEL_TOKEN: str = field(default_factory=lambda: os.getenv("VERCEL_TOKEN", ""))
@@ -51,11 +86,15 @@ class Settings:
     GITLAB_TOKEN: str = field(default_factory=lambda: os.getenv("GITLAB_TOKEN", ""))
     GITLAB_BASE_URL: str = field(default_factory=lambda: os.getenv("GITLAB_BASE_URL", "https://gitlab.com/api/v4"))
 
-    # Local LLM — Ollama (set OLLAMA_HOST in .env to point at your LLM host)
-    OLLAMA_HOST: str = field(default_factory=lambda: os.getenv("OLLAMA_HOST", "http://localhost:11434"))
-    OLLAMA_DEFAULT_MODEL: str = field(default_factory=lambda: os.getenv("OLLAMA_DEFAULT_MODEL", "qwen3:8b"))
+    # Local LLM — Ollama
+    # Canonical env var: OLLAMA_HOST (URL to Ollama endpoint)
+    # Canonical env var: OLLAMA_MODEL (model name, e.g. qwen3:8b)
+    OLLAMA_HOST: str = field(default_factory=lambda: _parse_url(
+        os.getenv("OLLAMA_HOST", "http://localhost:11434"), "OLLAMA_HOST"
+    ))
+    OLLAMA_MODEL: str = field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "qwen3:8b"))
 
-    # Groq (fast inference)
+    # Groq (fast inference fallback)
     GROQ_API_KEY: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
 
     # RunPod
@@ -84,33 +123,42 @@ class Settings:
     # Google Drive / Vertex
     VERTEX_LOCATION: str = field(default_factory=lambda: os.getenv("VERTEX_LOCATION", "europe-central2"))
 
-    # Shell access
-    ALLOWED_SSH_HOSTS: str = field(
-        default_factory=lambda: os.getenv("ALLOWED_SSH_HOSTS", "localhost")
-    )
+    # Shell access — allowlist for SSH targets
+    ALLOWED_SSH_HOSTS: str = field(default_factory=lambda: _parse_allowed_hosts(
+        os.getenv("ALLOWED_SSH_HOSTS", "localhost")
+    ))
 
-    # Server
-    PORT: int = field(default_factory=lambda: int(os.getenv("PORT", "8080")))
+    # Server port — strictly validated (must be 1–65535)
+    PORT: int = field(default_factory=lambda: _parse_port(os.getenv("PORT", "8080")))
 
     def get_allowed_hosts(self) -> list[str]:
         return [h.strip() for h in self.ALLOWED_SSH_HOSTS.split(",") if h.strip()]
 
     def validate(self) -> list[str]:
-        """Return list of missing critical configs."""
-        warnings = []
+        """
+        Return list of configuration issues.
+        Issues prefixed 'ERROR:' are critical — the server will not serve protected routes.
+        Issues prefixed 'WARNING:' indicate disabled features.
+        """
+        issues: list[str] = []
         if not self.AUTH_TOKEN:
-            warnings.append("NEXUS_AUTH_TOKEN not set - server has NO auth!")
+            issues.append(
+                "ERROR: NEXUS_AUTH_TOKEN not set — all protected routes will return 503. "
+                "Set NEXUS_AUTH_TOKEN in .env before accepting traffic."
+            )
         if not self.CLOUDFLARE_API_TOKEN:
-            warnings.append("CLOUDFLARE_API_TOKEN missing - CF tools disabled")
+            issues.append("WARNING: CLOUDFLARE_API_TOKEN missing — Cloudflare tools disabled")
         if not self.GITHUB_TOKEN:
-            warnings.append("GITHUB_TOKEN missing - GitHub tools disabled")
-        return warnings
+            issues.append("WARNING: GITHUB_TOKEN missing — GitHub tools disabled")
+        return issues
 
 
 settings = Settings()
 
-# Validate on import
-for w in settings.validate():
-    import sys
-
-    print(f"[CONFIG WARNING] {w}", file=sys.stderr)
+# Report configuration issues at startup
+_issues = settings.validate()
+for issue in _issues:
+    if issue.startswith("ERROR:"):
+        log.error("[CONFIG] %s", issue)
+    else:
+        log.warning("[CONFIG] %s", issue)

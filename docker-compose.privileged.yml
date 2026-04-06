@@ -1,0 +1,34 @@
+# ── Privileged override — docker socket opt-in ───────────────────────────────
+#
+# Use this ONLY when shell/docker tools require access to the host Docker daemon.
+#
+# Usage (compose override):
+#   docker compose -f docker-compose.yml -f docker-compose.privileged.yml up
+#
+# What this adds on top of docker-compose.yml:
+#   - mounts /var/run/docker.sock into mcp-server
+#   - runs mcp-server as root (required for socket access without group workaround)
+#   - enables INSTALL_DOCKER_CLI so the docker CLI is available inside the container
+#
+# WARNING:
+#   Mounting /var/run/docker.sock grants container processes near-equivalent
+#   access to root on the Docker host. Any code running inside the container
+#   can spawn privileged containers, read host filesystems, and escalate to
+#   full host control. This is an intentional capability for the shell module.
+#   Do NOT use this as a default or in untrusted/shared environments.
+#
+# This file is intentionally separate from the default compose so that
+# privileged deployment is an explicit operator decision, not a silent default.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  mcp-server:
+    build:
+      args:
+        INSTALL_DOCKER_CLI: "true"
+    user: "0:0"  # Override non-root default — explicitly accepted for this mode
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Document that privileged mode is active
+      NEXUS_PRIVILEGED_MODE: "true"

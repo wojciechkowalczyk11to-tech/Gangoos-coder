@@ -17,7 +17,8 @@ def test_ollama_host_from_env(monkeypatch):
 
 def test_ollama_model_default():
     s = Settings()
-    assert s.OLLAMA_DEFAULT_MODEL == "qwen3:8b"
+    # Canonical field: OLLAMA_MODEL (renamed from OLLAMA_DEFAULT_MODEL in phase-1c)
+    assert s.OLLAMA_MODEL == "qwen3:8b"
 
 
 def test_groq_key_empty_by_default():

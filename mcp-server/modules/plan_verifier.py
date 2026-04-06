@@ -32,7 +32,7 @@ async def _call_verifier(client: httpx.AsyncClient, cfg, plan: str) -> dict:
             resp = await client.post(
                 f"{cfg.OLLAMA_HOST}/v1/chat/completions",
                 json={
-                    "model": cfg.OLLAMA_DEFAULT_MODEL,
+                    "model": cfg.OLLAMA_MODEL,
                     "messages": [{"role": "system", "content": VERIFY_SYSTEM_PROMPT}] + messages,
                     "temperature": 0.1,
                     "max_tokens": 256,

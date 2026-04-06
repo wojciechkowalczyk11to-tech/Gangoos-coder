@@ -33,12 +33,16 @@ services:
       MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,mcp-server,gangus-agent}
       # Qwen3:8b — set OLLAMA_HOST in .env to point at your LLM host
       OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
-      OLLAMA_DEFAULT_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      # Canonical env var name is OLLAMA_MODEL (not OLLAMA_DEFAULT_MODEL)
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      MOJO_EXEC_BACKEND: ${MOJO_EXEC_BACKEND:-disabled}
     ports:
       - "8080:8080"
     volumes:
       - ./:/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
+      # docker socket is NOT mounted by default — no silent host-control.
+      # Use: docker compose -f docker-compose.yml -f docker-compose.privileged.yml up
+      # if shell/docker tools require host Docker access.
     working_dir: /app
 
   # ── Qwen3:8b — local dev only (production: gangus-llm VM) ───────────────

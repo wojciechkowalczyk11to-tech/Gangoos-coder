@@ -103,7 +103,7 @@ def register(mcp: FastMCP):
 
         try:
             async for token in stream_ollama(
-                client, cfg.OLLAMA_HOST, cfg.OLLAMA_DEFAULT_MODEL, messages, params.max_tokens
+                client, cfg.OLLAMA_HOST, cfg.OLLAMA_MODEL, messages, params.max_tokens
             ):
                 buffer.append(token)
                 current_step.append(token)

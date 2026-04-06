@@ -53,11 +53,13 @@ async def require_auth(
     expected = _get_auth_token()
 
     if not expected:
-        # No token configured — reject ALL requests to prevent accidental open access
-        log.error("NEXUS_AUTH_TOKEN not set — rejecting request for security")
+        # Auth token not configured — reject all protected requests.
+        # Returns 503 (not 500) to avoid leaking misconfiguration info.
+        # Log at error level so operators notice immediately.
+        log.error("NEXUS_AUTH_TOKEN not configured — rejecting protected request")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server misconfiguration: NEXUS_AUTH_TOKEN is not set. Contact the administrator.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service not available.",
         )
 
     if not credentials:
