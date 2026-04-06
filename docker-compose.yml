@@ -31,9 +31,30 @@ services:
     environment:
       PORT: ${PORT:-8080}
       MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,mcp-server,gangus-agent}
+      # Qwen3:8b on gangus-llm VM — override with OLLAMA_HOST env var
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://164.90.217.149:11434}
+      OLLAMA_DEFAULT_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
     ports:
       - "8080:8080"
     volumes:
       - ./:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /app
+
+  # ── Qwen3:8b — local dev only (production: gangus-llm VM) ───────────────
+  # docker-compose --profile llm up   (only when running locally)
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./llm/Modelfile:/tmp/Modelfile:ro
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+    restart: unless-stopped
+    # After first start: docker exec <container> ollama create gangus -f /tmp/Modelfile
+
+volumes:
+  ollama_data:
