@@ -242,6 +242,12 @@ class HealthResponse(BaseModel):
     timestamp: float
 
 
+class ToolsCallRequest(BaseModel):
+    """CodeAct /tools/call request body — module-level for FastAPI body detection."""
+    name: str
+    arguments: dict = Field(default_factory=dict)
+
+
 # ── FastAPI App ───────────────────────────────────────────────────────────────
 
 def create_rest_app() -> FastAPI:
@@ -468,10 +474,6 @@ def create_rest_app() -> FastAPI:
     # ── /tools/call — CodeAct contract endpoint ──────────
     # Rust codeact calls POST {NEXUS_URL}/tools/call with {"name": "...", "arguments": {...}}
     # This endpoint bridges that contract to /api/v1/tools/{tool_name}.
-
-    class ToolsCallRequest(BaseModel):
-        name: str
-        arguments: dict = {}
 
     @app.post(
         "/tools/call",
