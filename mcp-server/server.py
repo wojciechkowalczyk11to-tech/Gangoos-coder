@@ -188,6 +188,11 @@ if os.getenv("RUNPOD_API_KEY"):
 else:
     log.info("RunPod suite skipped (RUNPOD_API_KEY not set)")
 
+# ── mojo_exec — CodeAct contract tool ────────────────────────────────────────
+from modules.mojo_exec import register as register_mojo_exec
+register_mojo_exec(mcp)
+log.info("mojo_exec registered (backend=%s)", os.getenv("MOJO_EXEC_BACKEND", "disabled"))
+
 # ── E1-E4 Enhancements ───────────────────────────────────────────────────────
 try:
     from modules.plan_verifier import register as register_plan_verifier

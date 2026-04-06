@@ -465,6 +465,62 @@ def create_rest_app() -> FastAPI:
                 duration_ms=round(duration_ms, 2),
             )
 
+    # ── /tools/call — CodeAct contract endpoint ──────────
+    # Rust codeact calls POST {NEXUS_URL}/tools/call with {"name": "...", "arguments": {...}}
+    # This endpoint bridges that contract to /api/v1/tools/{tool_name}.
+
+    class ToolsCallRequest(BaseModel):
+        name: str
+        arguments: dict = {}
+
+    @app.post(
+        "/tools/call",
+        response_model=ToolCallResponse,
+        tags=["Tools"],
+        summary="CodeAct tool invocation endpoint",
+        description=(
+            "Rust CodeAct contract: POST /tools/call {\"name\": \"tool_name\", \"arguments\": {...}}. "
+            "Dispatches to the matching registered tool. "
+            "Same auth and error semantics as /api/v1/tools/{tool_name}."
+        ),
+    )
+    async def tools_call(
+        body: ToolsCallRequest,
+        _token: str = Depends(require_auth),
+    ) -> ToolCallResponse:
+        tool_name = body.name
+        if tool_name not in _TOOL_REGISTRY:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tool '{tool_name}' not found. GET /api/v1/tools for full list.",
+            )
+        fn, input_model_class = _TOOL_REGISTRY[tool_name]
+        start_time = time.monotonic()
+        ctx = _RestContext(tool_name=tool_name)
+        params_obj = input_model_class(**body.arguments) if input_model_class else body.arguments
+        try:
+            sig = inspect.signature(fn)
+            param_names = list(sig.parameters.keys())
+            if len(param_names) == 0:
+                result = await fn()
+            elif len(param_names) == 1:
+                result = await fn(params_obj)
+            else:
+                result = await fn(params_obj, ctx)
+            duration_ms = (time.monotonic() - start_time) * 1000
+            result_payload = result if isinstance(result, (str, dict, list)) else (
+                result.model_dump() if hasattr(result, "model_dump") else str(result)
+            )
+            return ToolCallResponse(tool=tool_name, success=True, result=result_payload,
+                                    duration_ms=round(duration_ms, 2))
+        except HTTPException:
+            raise
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            log.error(f"/tools/call '{tool_name}' error: {e}", exc_info=True)
+            return ToolCallResponse(tool=tool_name, success=False, result=None,
+                                    error=str(e), duration_ms=round(duration_ms, 2))
+
     # ── Custom OpenAPI 3.1 spec ───────────────────────────
     # FastAPI generates OpenAPI 3.0 by default. We override to produce
     # a richer 3.1-compatible spec with per-tool request body schemas.
