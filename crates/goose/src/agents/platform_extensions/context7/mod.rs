@@ -118,13 +118,30 @@ impl Context7Client {
     /// Uses word-boundary matching to avoid false positives on partial words.
     fn is_code_query(input: &str) -> bool {
         let triggers = [
-            "how", "what", "why", "error", "fix", "bug", "implement",
-            "write", "create", "use", "import", "hook", "function",
-            "api", "docs", "example", "async", "await",
+            "how",
+            "what",
+            "why",
+            "error",
+            "fix",
+            "bug",
+            "implement",
+            "write",
+            "create",
+            "use",
+            "import",
+            "hook",
+            "function",
+            "api",
+            "docs",
+            "example",
+            "async",
+            "await",
         ];
         let lower = input.to_lowercase();
         triggers.iter().any(|t| {
-            lower.split(|c: char| !c.is_alphanumeric()).any(|word| word == *t)
+            lower
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|word| word == *t)
         })
     }
 
@@ -155,7 +172,10 @@ impl Context7Client {
                     }
                 }
             }
-            tracing::debug!("Context7: API fetch failed for '{}', falling back to stubs", lib_key);
+            tracing::debug!(
+                "Context7: API fetch failed for '{}', falling back to stubs",
+                lib_key
+            );
         }
 
         // Built-in stubs for offline / no-API use
@@ -250,12 +270,11 @@ impl McpClientTrait for Context7Client {
 /// Lightweight per-session last-message store.
 /// Extensions call `last_message::set(session_id, text)` after each user turn.
 pub mod last_message {
+    use once_cell::sync::Lazy;
     use std::collections::HashMap;
     use std::sync::Mutex;
-    use once_cell::sync::Lazy;
 
-    static STORE: Lazy<Mutex<HashMap<String, String>>> =
-        Lazy::new(|| Mutex::new(HashMap::new()));
+    static STORE: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
     pub fn set(session_id: &str, message: &str) {
         if let Ok(mut guard) = STORE.lock() {

@@ -147,16 +147,12 @@ impl McpClientTrait for PlannerClient {
                 ))]))
             }
             "advance_plan" => {
-                let params: AdvancePlanParams =
-                    serde_json::from_value(serde_json::Value::Object(
-                        arguments.unwrap_or_default(),
-                    ))
-                    .map_err(|e| {
-                        Error::McpError(rmcp::model::ErrorData::invalid_params(
-                            e.to_string(),
-                            None,
-                        ))
-                    })?;
+                let params: AdvancePlanParams = serde_json::from_value(serde_json::Value::Object(
+                    arguments.unwrap_or_default(),
+                ))
+                .map_err(|e| {
+                    Error::McpError(rmcp::model::ErrorData::invalid_params(e.to_string(), None))
+                })?;
 
                 let summary = if let Ok(mut plan) = self.plan.lock() {
                     plan.current = (plan.current + params.count).min(plan.steps.len());

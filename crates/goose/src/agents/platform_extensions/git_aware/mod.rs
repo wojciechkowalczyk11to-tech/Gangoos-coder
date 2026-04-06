@@ -61,8 +61,7 @@ impl McpClientTrait for GitAwareClient {
     }
 
     async fn get_moim(&self, _session_id: &str) -> Option<String> {
-        let working_dir =
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let working_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let summary = repo_map::get_repo_summary(&working_dir)?;
         Some(format!(
             "Branch: {} | Staged: {} | Unstaged: {} | Untracked: {} | Last commit: {}",
