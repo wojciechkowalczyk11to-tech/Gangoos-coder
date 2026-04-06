@@ -414,7 +414,7 @@ impl McpClientTrait for PlannerClient {
                 match Plan::load(&params.plan_id) {
                     Ok(plan) => {
                         let mut output = format!("**{}**\n", plan.title);
-                        if let Some(desc) = plan.description {
+                        if let Some(ref desc) = plan.description {
                             output.push_str(&format!("Description: {}\n\n", desc));
                         }
                         let (done, total) = plan.progress();
