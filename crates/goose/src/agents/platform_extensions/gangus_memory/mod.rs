@@ -44,17 +44,15 @@ impl MemoryDatabase {
         let path = Self::memory_file();
         if path.exists() {
             match fs::read_to_string(&path) {
-                Ok(contents) => {
-                    match serde_json::from_str::<Self>(&contents) {
-                        Ok(db) => {
-                            tracing::debug!("Loaded memory database from {:?}", path);
-                            return db;
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to parse memory.json: {}", e);
-                        }
+                Ok(contents) => match serde_json::from_str::<Self>(&contents) {
+                    Ok(db) => {
+                        tracing::debug!("Loaded memory database from {:?}", path);
+                        return db;
                     }
-                }
+                    Err(e) => {
+                        tracing::warn!("Failed to parse memory.json: {}", e);
+                    }
+                },
                 Err(e) => {
                     tracing::warn!("Failed to read memory.json: {}", e);
                 }
@@ -80,7 +78,13 @@ impl MemoryDatabase {
         cwd.join(".gangoos").join("memory.json")
     }
 
-    fn store(&mut self, key: String, value: String, category: Option<String>, notes: Option<String>) {
+    fn store(
+        &mut self,
+        key: String,
+        value: String,
+        category: Option<String>,
+        notes: Option<String>,
+    ) {
         let now = chrono::Utc::now().to_rfc3339();
         let existing_created_at = self
             .entries
@@ -111,8 +115,12 @@ impl MemoryDatabase {
             .filter(|(k, v)| {
                 k.to_lowercase().contains(&query_lower)
                     || v.value.to_lowercase().contains(&query_lower)
-                    || v.notes.as_ref().map_or(false, |n| n.to_lowercase().contains(&query_lower))
-                    || v.category.as_ref().map_or(false, |c| c.to_lowercase().contains(&query_lower))
+                    || v.notes
+                        .as_ref()
+                        .map_or(false, |n| n.to_lowercase().contains(&query_lower))
+                    || v.category
+                        .as_ref()
+                        .map_or(false, |c| c.to_lowercase().contains(&query_lower))
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
@@ -137,11 +145,7 @@ impl MemoryDatabase {
             .filter_map(|e| e.category.as_ref())
             .collect();
 
-        format!(
-            "Memory: {} entries, {} categories",
-            total,
-            categories.len()
-        )
+        format!("Memory: {} entries, {} categories", total, categories.len())
     }
 }
 
@@ -270,7 +274,12 @@ impl McpClientTrait for GangusMemoryClient {
 
                 match self.db.lock() {
                     Ok(mut db) => {
-                        db.store(params.key.clone(), params.value, params.category, params.notes);
+                        db.store(
+                            params.key.clone(),
+                            params.value,
+                            params.category,
+                            params.notes,
+                        );
                         let _ = db.save();
                         Ok(CallToolResult::success(vec![Content::text(format!(
                             "Memory stored: {}",
@@ -284,28 +293,27 @@ impl McpClientTrait for GangusMemoryClient {
             }
 
             "memory_retrieve" => {
-                let params: MemoryRetrieveParams = serde_json::from_value(serde_json::Value::Object(
-                    arguments.unwrap_or_default(),
-                ))
+                let params: MemoryRetrieveParams = serde_json::from_value(
+                    serde_json::Value::Object(arguments.unwrap_or_default()),
+                )
                 .map_err(|e| {
                     Error::McpError(rmcp::model::ErrorData::invalid_params(e.to_string(), None))
                 })?;
 
                 match self.db.lock() {
-                    Ok(db) => {
-                        match db.retrieve(&params.key) {
-                            Some(entry) => {
-                                let result = serde_json::to_string_pretty(&entry).unwrap_or_else(|_| {
+                    Ok(db) => match db.retrieve(&params.key) {
+                        Some(entry) => {
+                            let result =
+                                serde_json::to_string_pretty(&entry).unwrap_or_else(|_| {
                                     format!("Error serializing entry for key: {}", params.key)
                                 });
-                                Ok(CallToolResult::success(vec![Content::text(result)]))
-                            }
-                            None => Ok(CallToolResult::error(vec![Content::text(format!(
-                                "Memory not found: {}",
-                                params.key
-                            ))])),
+                            Ok(CallToolResult::success(vec![Content::text(result)]))
                         }
-                    }
+                        None => Ok(CallToolResult::error(vec![Content::text(format!(
+                            "Memory not found: {}",
+                            params.key
+                        ))])),
+                    },
                     Err(_) => Ok(CallToolResult::error(vec![Content::text(
                         "Failed to acquire database lock".to_string(),
                     )])),
@@ -350,36 +358,34 @@ impl McpClientTrait for GangusMemoryClient {
                 }
             }
 
-            "memory_list" => {
-                match self.db.lock() {
-                    Ok(db) => {
-                        let entries = db.list_all();
-                        if entries.is_empty() {
-                            Ok(CallToolResult::success(vec![Content::text(
-                                "Memory database is empty.".to_string(),
-                            )]))
-                        } else {
-                            let mut output = format!("Total {} memory entries:\n\n", entries.len());
-                            for (key, entry) in entries {
-                                output.push_str(&format!("**{}**\n", key));
-                                output.push_str(&format!("  Value: {}\n", entry.value));
-                                if let Some(cat) = entry.category {
-                                    output.push_str(&format!("  Category: {}\n", cat));
-                                }
-                                if let Some(notes) = entry.notes {
-                                    output.push_str(&format!("  Notes: {}\n", notes));
-                                }
-                                output.push_str(&format!("  Created: {}\n", entry.created_at));
-                                output.push_str(&format!("  Updated: {}\n\n", entry.updated_at));
+            "memory_list" => match self.db.lock() {
+                Ok(db) => {
+                    let entries = db.list_all();
+                    if entries.is_empty() {
+                        Ok(CallToolResult::success(vec![Content::text(
+                            "Memory database is empty.".to_string(),
+                        )]))
+                    } else {
+                        let mut output = format!("Total {} memory entries:\n\n", entries.len());
+                        for (key, entry) in entries {
+                            output.push_str(&format!("**{}**\n", key));
+                            output.push_str(&format!("  Value: {}\n", entry.value));
+                            if let Some(cat) = entry.category {
+                                output.push_str(&format!("  Category: {}\n", cat));
                             }
-                            Ok(CallToolResult::success(vec![Content::text(output)]))
+                            if let Some(notes) = entry.notes {
+                                output.push_str(&format!("  Notes: {}\n", notes));
+                            }
+                            output.push_str(&format!("  Created: {}\n", entry.created_at));
+                            output.push_str(&format!("  Updated: {}\n\n", entry.updated_at));
                         }
+                        Ok(CallToolResult::success(vec![Content::text(output)]))
                     }
-                    Err(_) => Ok(CallToolResult::error(vec![Content::text(
-                        "Failed to acquire database lock".to_string(),
-                    )])),
                 }
-            }
+                Err(_) => Ok(CallToolResult::error(vec![Content::text(
+                    "Failed to acquire database lock".to_string(),
+                )])),
+            },
 
             "memory_forget" => {
                 let params: MemoryForgetParams = serde_json::from_value(serde_json::Value::Object(

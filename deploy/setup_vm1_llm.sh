@@ -4,7 +4,7 @@ set -euo pipefail
 # setup_vm1_llm.sh
 # Deployment script for VM1 (gangus-llm)
 # Installs and configures Ollama with Qwen model for CodeAct agent
-# IP: 164.90.217.149 (Public), 10.114.0.3 (Private VPC)
+# IPs configured via environment variables
 
 MODEL_NAME="${MODEL_NAME:-deepseek-r1:8b}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

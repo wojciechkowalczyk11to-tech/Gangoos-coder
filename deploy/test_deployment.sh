@@ -5,10 +5,10 @@ set -euo pipefail
 # Comprehensive testing script for deployed VMs
 # Run from local machine after deploy_both.sh completes
 
-VM1_IP="${VM1_IP:-164.90.217.149}"
-VM1_PRIVATE_IP="${VM1_PRIVATE_IP:-10.114.0.3}"
-VM2_IP="${VM2_IP:-46.101.108.96}"
-VM2_PRIVATE_IP="${VM2_PRIVATE_IP:-10.114.0.2}"
+VM1_IP="${VM1_IP:?VM1_IP environment variable required}"
+VM1_PRIVATE_IP="${VM1_PRIVATE_IP:?VM1_PRIVATE_IP environment variable required}"
+VM2_IP="${VM2_IP:?VM2_IP environment variable required}"
+VM2_PRIVATE_IP="${VM2_PRIVATE_IP:?VM2_PRIVATE_IP environment variable required}"
 VM_USER="${VM_USER:-root}"
 SSH_KEY="${SSH_KEY:-}"
 

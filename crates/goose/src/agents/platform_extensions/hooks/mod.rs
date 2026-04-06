@@ -323,7 +323,9 @@ impl McpClientTrait for HooksClient {
                             for hook in hooks {
                                 output.push_str(&format!(
                                     "- **{}** ({}): {}\n",
-                                    hook.name, hook.event, hook.status_str()
+                                    hook.name,
+                                    hook.event,
+                                    hook.status_str()
                                 ));
                                 if let Some(desc) = hook.description {
                                     output.push_str(&format!("  {}\n", desc));

@@ -4,7 +4,7 @@ set -euo pipefail
 # setup_vm2_orchestrator.sh
 # Deployment script for VM2 (gangus-coder)
 # Installs Docker, clones repo, and starts MCP server + CodeAct agent
-# IP: 46.101.108.96 (Public), 10.114.0.2 (Private VPC)
+# IPs configured via environment variables
 
 WORKSPACE_DIR="/home/ubuntu/workspace"
 REPO_DIR="$WORKSPACE_DIR/gangoos-coder"

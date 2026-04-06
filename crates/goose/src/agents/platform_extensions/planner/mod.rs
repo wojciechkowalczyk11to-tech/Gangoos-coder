@@ -98,7 +98,11 @@ impl Plan {
     }
 
     fn progress(&self) -> (usize, usize) {
-        let completed = self.steps.iter().filter(|s| s.status == "completed").count();
+        let completed = self
+            .steps
+            .iter()
+            .filter(|s| s.status == "completed")
+            .count();
         (completed, self.steps.len())
     }
 
@@ -327,10 +331,7 @@ impl McpClientTrait for PlannerClient {
                     Error::McpError(rmcp::model::ErrorData::invalid_params(e.to_string(), None))
                 })?;
 
-                let plan_id = format!(
-                    "plan_{}",
-                    chrono::Utc::now().timestamp_millis() % 1_000_000
-                );
+                let plan_id = format!("plan_{}", chrono::Utc::now().timestamp_millis() % 1_000_000);
                 let mut plan = Plan::new(plan_id.clone(), params.title, params.description);
 
                 if let Some(steps_text) = params.steps {
@@ -362,16 +363,17 @@ impl McpClientTrait for PlannerClient {
             }
 
             "plan_update_step" => {
-                let params: PlanUpdateStepParams = serde_json::from_value(serde_json::Value::Object(
-                    arguments.unwrap_or_default(),
-                ))
+                let params: PlanUpdateStepParams = serde_json::from_value(
+                    serde_json::Value::Object(arguments.unwrap_or_default()),
+                )
                 .map_err(|e| {
                     Error::McpError(rmcp::model::ErrorData::invalid_params(e.to_string(), None))
                 })?;
 
                 match Plan::load(&params.plan_id) {
                     Ok(mut plan) => {
-                        if plan.update_step(params.step_index, params.status.clone(), params.notes) {
+                        if plan.update_step(params.step_index, params.status.clone(), params.notes)
+                        {
                             if let Err(e) = plan.save() {
                                 return Ok(CallToolResult::error(vec![Content::text(format!(
                                     "Failed to save plan: {}",
@@ -440,31 +442,29 @@ impl McpClientTrait for PlannerClient {
                 }
             }
 
-            "plan_list" => {
-                match Plan::list_all() {
-                    Ok(plans) => {
-                        if plans.is_empty() {
-                            Ok(CallToolResult::success(vec![Content::text(
-                                "No plans found.".to_string(),
-                            )]))
-                        } else {
-                            let mut output = format!("**{} plans**\n\n", plans.len());
-                            for plan in &plans {
-                                let (done, total) = plan.progress();
-                                output.push_str(&format!(
-                                    "- **{}** ({}): {}/{} done\n",
-                                    plan.id, plan.status, done, total
-                                ));
-                            }
-                            Ok(CallToolResult::success(vec![Content::text(output)]))
+            "plan_list" => match Plan::list_all() {
+                Ok(plans) => {
+                    if plans.is_empty() {
+                        Ok(CallToolResult::success(vec![Content::text(
+                            "No plans found.".to_string(),
+                        )]))
+                    } else {
+                        let mut output = format!("**{} plans**\n\n", plans.len());
+                        for plan in &plans {
+                            let (done, total) = plan.progress();
+                            output.push_str(&format!(
+                                "- **{}** ({}): {}/{} done\n",
+                                plan.id, plan.status, done, total
+                            ));
                         }
+                        Ok(CallToolResult::success(vec![Content::text(output)]))
                     }
-                    Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
-                        "Failed to list plans: {}",
-                        e
-                    ))])),
                 }
-            }
+                Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                    "Failed to list plans: {}",
+                    e
+                ))])),
+            },
 
             "plan_delete" => {
                 let params: PlanDeleteParams = serde_json::from_value(serde_json::Value::Object(
@@ -508,11 +508,9 @@ impl McpClientTrait for PlannerClient {
 
     async fn get_moim(&self, _session_id: &str) -> Option<String> {
         match self.active_plan.lock() {
-            Ok(guard) => {
-                guard.as_ref().map(|plan| {
-                    format!("**[Active Plan]**\n{}", plan.summary())
-                })
-            }
+            Ok(guard) => guard
+                .as_ref()
+                .map(|plan| format!("**[Active Plan]**\n{}", plan.summary())),
             Err(_) => None,
         }
     }
