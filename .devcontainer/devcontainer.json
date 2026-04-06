@@ -1,34 +1,19 @@
 {
-  "name": "gangus-coder",
+  "name": "Gangoos-coder",
   "build": {
     "dockerfile": "Dockerfile"
   },
   "features": {
-    "ghcr.io/devcontainers/features/rust:1": {
-      "version": "stable"
-    },
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.12"
-    },
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
-    },
+    "ghcr.io/devcontainers/features/rust:1": { "version": "stable" },
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
   "forwardPorts": [3000, 8080, 11434],
   "portsAttributes": {
-    "3000": {
-      "label": "gangus-agent-api",
-      "onAutoForward": "notify"
-    },
-    "8080": {
-      "label": "mcp-server",
-      "onAutoForward": "notify"
-    },
-    "11434": {
-      "label": "ollama-llm",
-      "onAutoForward": "silent"
-    }
+    "3000": { "label": "gangus-agent-api", "onAutoForward": "notify" },
+    "8080": { "label": "mcp-server", "onAutoForward": "notify" },
+    "11434": { "label": "ollama-llm", "onAutoForward": "silent" }
   },
   "customizations": {
     "vscode": {
@@ -39,17 +24,19 @@
         "vadimcn.vscode-lldb",
         "tamasfe.even-better-toml",
         "ms-azuretools.vscode-docker",
-        "GitHub.copilot"
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
         "editor.formatOnSave": true,
-        "[rust]": {
-          "editor.defaultFormatter": "rust-lang.rust-analyzer"
-        },
-        "[python]": {
-          "editor.defaultFormatter": "ms-python.black-formatter"
-        }
+        "editor.rulers": [100],
+        "[rust]": { "editor.defaultFormatter": "rust-lang.rust-analyzer" },
+        "[python]": { "editor.defaultFormatter": "ms-python.black-formatter" },
+        "github.copilot.chat.defaultOpenedModel": "claude-opus-4-5",
+        "github.copilot.chat.agent.thinkingMode": "extended",
+        "github.copilot.enable": { "*": true },
+        "github.copilot.editor.enableAutoCompletions": true
       }
     }
   },
