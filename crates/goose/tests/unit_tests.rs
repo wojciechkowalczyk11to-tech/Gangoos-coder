@@ -86,8 +86,7 @@ mod model_config_tests {
 
     #[test]
     fn with_toolshim_model_sets_model_name() {
-        let config = ModelConfig::default()
-            .with_toolshim_model(Some("llama-3".to_string()));
+        let config = ModelConfig::default().with_toolshim_model(Some("llama-3".to_string()));
         assert_eq!(config.toolshim_model, Some("llama-3".to_string()));
     }
 
@@ -552,8 +551,8 @@ mod provider_metadata_tests {
 
     #[test]
     fn with_setup_steps_adds_steps() {
-        let meta = ProviderMetadata::empty()
-            .with_setup_steps(vec!["Step 1: Do this", "Step 2: Do that"]);
+        let meta =
+            ProviderMetadata::empty().with_setup_steps(vec!["Step 1: Do this", "Step 2: Do that"]);
         assert_eq!(meta.setup_steps.len(), 2);
         assert_eq!(meta.setup_steps[0], "Step 1: Do this");
     }
@@ -857,18 +856,15 @@ mod provider_usage_tests {
 
     #[test]
     fn new_creates_with_model() {
-        let usage =
-            ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(100), Some(50), None));
+        let usage = ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(100), Some(50), None));
         assert_eq!(usage.model, "gpt-4");
         assert_eq!(usage.usage.input_tokens, Some(100));
     }
 
     #[test]
     fn combine_with_adds_usage() {
-        let a =
-            ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(100), Some(50), None));
-        let b =
-            ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(200), Some(100), None));
+        let a = ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(100), Some(50), None));
+        let b = ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(200), Some(100), None));
         let combined = a.combine_with(&b);
         assert_eq!(combined.model, "gpt-4");
         assert_eq!(combined.usage.input_tokens, Some(300));
@@ -877,10 +873,8 @@ mod provider_usage_tests {
 
     #[test]
     fn combine_with_uses_self_model() {
-        let a =
-            ProviderUsage::new("model-a".to_string(), Usage::new(Some(10), None, None));
-        let b =
-            ProviderUsage::new("model-b".to_string(), Usage::new(Some(20), None, None));
+        let a = ProviderUsage::new("model-a".to_string(), Usage::new(Some(10), None, None));
+        let b = ProviderUsage::new("model-b".to_string(), Usage::new(Some(20), None, None));
         let combined = a.combine_with(&b);
         assert_eq!(combined.model, "model-a");
     }
