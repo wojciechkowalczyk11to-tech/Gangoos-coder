@@ -581,7 +581,13 @@ mod provider_metadata_tests {
     fn metadata_with_config_keys() {
         let keys = vec![
             ConfigKey::new("API_KEY", true, true, None, true),
-            ConfigKey::new("ENDPOINT", false, false, Some("https://api.test.com"), false),
+            ConfigKey::new(
+                "ENDPOINT",
+                false,
+                false,
+                Some("https://api.test.com"),
+                false,
+            ),
         ];
         let meta = ProviderMetadata::new(
             "custom",
@@ -651,10 +657,7 @@ mod config_key_tests {
             Some("https://api.example.com"),
             false,
         );
-        assert_eq!(
-            key.default,
-            Some("https://api.example.com".to_string())
-        );
+        assert_eq!(key.default, Some("https://api.example.com".to_string()));
         assert!(!key.required);
     }
 
@@ -854,24 +857,18 @@ mod provider_usage_tests {
 
     #[test]
     fn new_creates_with_model() {
-        let usage = ProviderUsage::new(
-            "gpt-4".to_string(),
-            Usage::new(Some(100), Some(50), None),
-        );
+        let usage =
+            ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(100), Some(50), None));
         assert_eq!(usage.model, "gpt-4");
         assert_eq!(usage.usage.input_tokens, Some(100));
     }
 
     #[test]
     fn combine_with_adds_usage() {
-        let a = ProviderUsage::new(
-            "gpt-4".to_string(),
-            Usage::new(Some(100), Some(50), None),
-        );
-        let b = ProviderUsage::new(
-            "gpt-4".to_string(),
-            Usage::new(Some(200), Some(100), None),
-        );
+        let a =
+            ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(100), Some(50), None));
+        let b =
+            ProviderUsage::new("gpt-4".to_string(), Usage::new(Some(200), Some(100), None));
         let combined = a.combine_with(&b);
         assert_eq!(combined.model, "gpt-4");
         assert_eq!(combined.usage.input_tokens, Some(300));
@@ -880,14 +877,10 @@ mod provider_usage_tests {
 
     #[test]
     fn combine_with_uses_self_model() {
-        let a = ProviderUsage::new(
-            "model-a".to_string(),
-            Usage::new(Some(10), None, None),
-        );
-        let b = ProviderUsage::new(
-            "model-b".to_string(),
-            Usage::new(Some(20), None, None),
-        );
+        let a =
+            ProviderUsage::new("model-a".to_string(), Usage::new(Some(10), None, None));
+        let b =
+            ProviderUsage::new("model-b".to_string(), Usage::new(Some(20), None, None));
         let combined = a.combine_with(&b);
         assert_eq!(combined.model, "model-a");
     }
@@ -947,8 +940,7 @@ mod prompt_template_tests {
     #[test]
     fn render_string_preserves_multiline() {
         let template = "Line 1\nLine 2\nLine 3";
-        let result =
-            prompt_template::render_string(template, &HashMap::<String, String>::new());
+        let result = prompt_template::render_string(template, &HashMap::<String, String>::new());
         assert!(result.is_ok());
         let rendered = result.unwrap();
         assert!(rendered.contains("Line 1"));
