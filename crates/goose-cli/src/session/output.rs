@@ -1,4 +1,3 @@
-use anstream::println;
 use bat::WrappingMode;
 use console::{measure_text_width, style, Color, Term};
 use goose::config::Config;
@@ -1606,6 +1605,7 @@ mod tests {
 
 /// Returns a unified diff string with `+`/`-` prefixes per changed line.
 /// Unchanged lines are shown with a leading space.
+#[allow(dead_code)]
 pub fn pretty_diff(before: &str, after: &str) -> String {
     let before_lines: Vec<&str> = before.lines().collect();
     let after_lines: Vec<&str> = after.lines().collect();
