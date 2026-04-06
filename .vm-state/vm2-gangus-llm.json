@@ -1,0 +1,10 @@
+{
+  "vm": "gangus-llm",
+  "ip": "164.90.217.149",
+  "role": "local-llm",
+  "services": ["ollama:11434", "ssh:22"],
+  "model": "qwen3:8b",
+  "model_size": "5.2GB",
+  "quantization": "Q4_K_M",
+  "context": 32768
+}
