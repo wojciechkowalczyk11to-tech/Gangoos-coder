@@ -1,31 +1,64 @@
 #!/bin/bash
-# Gangus-coder Codespace setup
+# Gangoos-coder Codespace setup
 set -e
 
-echo "=== [1/5] Rust dependencies ==="
+echo "=== [1/6] Rust dependencies ==="
 cargo fetch
 
-echo "=== [2/5] Python MCP server ==="
+echo "=== [2/6] Python MCP server ==="
 python3 -m pip install --upgrade pip --quiet
 python3 -m pip install -r mcp-server/requirements.txt --quiet
 
-echo "=== [3/5] Python LLM client ==="
-python3 -m pip install httpx pydantic --quiet
+echo "=== [3/6] Python LLM + test deps ==="
+python3 -m pip install httpx pydantic pytest pytest-asyncio pytest-cov respx python-dotenv --quiet
 
-echo "=== [4/5] Node / UI ==="
+echo "=== [4/6] Node / UI ==="
 if [ -f ui/package.json ]; then
   cd ui && npm install --silent && cd ..
 fi
 
-echo "=== [5/5] Mojo (optional) ==="
-if command -v mojo >/dev/null 2>&1; then
-  echo "Mojo $(mojo --version) available"
+echo "=== [5/6] Mojo (optional) ==="
+if command -v mojo &>/dev/null; then
+  echo "Mojo found: $(mojo --version)"
+fi
+
+echo "=== [6/6] Env validation ==="
+# Print which env vars are set (names only, no values)
+for var in NEXUS_AUTH_TOKEN OLLAMA_HOST NEXUS_MCP_URL GOOSE_PROVIDER GOOSE_MODEL; do
+  if [ -n "${!var}" ]; then
+    echo "  ✓ $var"
+  else
+    echo "  ✗ $var (not set — add to .env or Codespaces secrets)"
+  fi
+done
+
+# Load .env if present (for local Codespace)
+if [ -f .env ]; then
+  echo "  .env found — loading"
+  set -a; source .env; set +a
+fi
+
+# Quick connectivity test
+echo ""
+echo "=== Connectivity checks ==="
+MCP_URL="${NEXUS_MCP_URL:-http://46.101.108.96:8080}"
+OLLAMA="${OLLAMA_HOST:-http://164.90.217.149:11434}"
+
+if curl -sf --connect-timeout 5 "$MCP_URL/health" > /dev/null 2>&1; then
+  TOOLS=$(curl -sf "$MCP_URL/health" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tools_registered','?'))" 2>/dev/null)
+  echo "  ✓ MCP server ($MCP_URL) — $TOOLS tools"
 else
-  echo "Mojo SDK not available — skipping (CPU-only Codespace)"
+  echo "  ✗ MCP server unreachable: $MCP_URL"
+fi
+
+if curl -sf --connect-timeout 5 "$OLLAMA/api/tags" > /dev/null 2>&1; then
+  MODEL=$(curl -sf "$OLLAMA/api/tags" | python3 -c "import sys,json; d=json.load(sys.stdin); m=d.get('models',[]); print(m[0]['name'] if m else 'none')" 2>/dev/null)
+  echo "  ✓ Ollama ($OLLAMA) — model: $MODEL"
+else
+  echo "  ✗ Ollama unreachable: $OLLAMA"
 fi
 
 echo ""
-echo "✓ Gangus-coder ready."
-echo "  docker compose up          → agent + MCP server"
-echo "  docker compose --profile llm up → + local Qwen3:8b"
-echo "  Set OLLAMA_HOST in .env to use remote LLM VM"
+echo "=== Setup complete ==="
+echo "Next: cargo build --release -p goose-cli"
+echo "Then: ./target/release/goose run"
