@@ -20,3 +20,7 @@ playwright>=1.49.0
 pytest>=8.3.0
 pytest-asyncio>=0.23.0
 anyio>=4.0.0
+
+# ARMORED v2: Security & category tools
+pyotp>=2.9.0
+python-gnupg>=0.5.2

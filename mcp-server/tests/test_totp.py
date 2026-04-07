@@ -21,8 +21,9 @@ class TestCategoryTOTP:
 
     def test_init_requires_secret(self):
         """Should raise ValueError without secret base."""
-        with pytest.raises(ValueError, match="TOTP_SECRET_BASE"):
-            CategoryTOTP(secret_base="")
+        with patch.dict("os.environ", {"TOTP_SECRET_BASE": ""}, clear=False):
+            with pytest.raises(ValueError, match="TOTP_SECRET_BASE"):
+                CategoryTOTP(secret_base="")
 
     def test_init_from_env(self):
         """Should read secret from env var."""

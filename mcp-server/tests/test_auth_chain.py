@@ -66,7 +66,7 @@ class TestAuthChainBearer:
         with patch.dict("os.environ", {"NEXUS_AUTH_TOKEN": "test-token-12345"}, clear=False):
             result = setup_chain["chain"].evaluate("grok_analyze", auth_header="Bearer test-token-12345")
             assert result.allowed is True
-            assert result.caller == "12345"  # last 6 chars... actually last 5 here
+            assert result.caller == "-12345"  # last 6 chars of "test-token-12345"
 
     def test_valid_token_locked_category(self, setup_chain):
         """Should reject valid token for locked TOTP category."""
